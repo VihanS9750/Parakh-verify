@@ -19,9 +19,10 @@ Market context and competitors: [docs/market-analysis.md](docs/market-analysis.m
 3. **Live demo only.** No pre-recorded output passed off as live.
 4. **Everyone can explain everything.** Prefer plain functions and the standard library. No frameworks or abstractions we don't need. After each change, explain it in two or three sentences.
 5. **Never call a named firm or person a "fraud".** Say "not found in the SEBI investment adviser register as of 14:32 IST".
-6. **Never bypass a captcha, login or OTP.** Show the captcha to the user. Wait a few seconds between requests to the same site. Respect each site's terms.
-7. **Protect personal data.** Never store Aadhaar or PAN numbers; mask them in logs.
-8. **Secrets live in `.env`** (never committed). See `.env.example`.
+6. **Never automate a captcha, login or OTP portal** (CBIC, income tax, eCourts, GST search, cybercrime.gov.in). Validate the ID offline and give the user the official link. No captcha-solving libraries. Wait a few seconds between requests to the same site. Respect each site's terms.
+7. **Narrow purpose.** Parakh is a verification service, not a general chatbot (WhatsApp has banned general-purpose AI bots since Jan 2026).
+8. **Protect personal data.** Redact Aadhaar, PAN and account numbers before sending anything to Claude. Never store them; mask them in logs.
+9. **Secrets live in `.env`** (never committed). See `.env.example`.
 
 ## How it works
 
@@ -53,7 +54,7 @@ Every connector is one function in `connectors/<source>.py` that returns this di
 ```
 
 - `unavailable`: the site timed out or errored (time out after a few seconds, retry once).
-- `needs_user`: a captcha or similar step the user must do.
+- `needs_user`: the source is gated (captcha/OTP), so we return the official link for the user to confirm there.
 - Each connector file ends with an `if __name__ == "__main__":` block that runs one **live** lookup and asserts the shape. That is our only test per connector.
 
 The agent turns connector results into one of four verdicts:
@@ -70,12 +71,11 @@ app.py              Streamlit page                         Vihan
 agent.py            Claude tool loop + verdict             Vihan
 store.py            SQLite: downloads + check log          Atharva
 connectors/
-  sebi.py           SEBI registers                         Rahul
-  rbi.py            RBI NBFC / cancelled / forex lists     Rahul
-  pib.py            PIB Fact Check                         Atharva
-  cbic.py           CBIC document ID (DIN)                 Atharva
-  itd.py            Income tax notice check                Atharva
-  ecourts.py        eCourts case status                    Atharva
+  sebi.py           SEBI registers (live, cached)          Rahul
+  rbi.py            RBI NBFC / forex Alert / lending apps  Rahul
+  lists.py          UGC fake list, AMFI, IRDAI             Atharva
+  ids.py            GSTIN / CIN / CNR / DIN format checks  Atharva
+                    + official deep links
 docs/               market analysis, pitch notes
 test_forwards/      real forwards for testing (redact private people's details first)
 ```
@@ -84,14 +84,20 @@ Create files only when the plan reaches them. Don't scaffold ahead.
 
 ## Sources and what we know
 
-| Source | Status |
-|---|---|
-| SEBI investment adviser register (search by name or registration no.) | Loaded in a test on 31 Oct 2026; search page, no download |
-| RBI list of NBFCs, cancelled list, forex Alert List | Published by RBI as PDFs/pages; not tested yet |
-| CBIC DIN lookup | Captcha form; not confirmed (test fetch failed from outside India) |
-| Income tax "Authenticate notice/order", eCourts, PIB Fact Check | Not tested yet |
+Tested 31 Oct 2026 from a fetcher that may be outside India. Full detail: [docs/market-analysis.md](docs/market-analysis.md).
 
-Atharva confirms each from an Indian connection on Day 1 and updates this table.
+| Source | How we use it | Status |
+|---|---|---|
+| SEBI registered intermediaries (advisers: ~1,071 rows, "as on" date shown) | **Live**, polite fetch + cache | Loaded; no captcha, no export, robots.txt allows |
+| AMFI distributor search (ARN) | Live or dated list | Loaded |
+| IRDAI insurer / broker / agent lists | Dated list | Homepage loaded; list pages not opened |
+| RBI NBFC list, forex Alert List (95 names, Nov 2025), lending-app list | **Dated list, downloaded by hand in a browser** | RBI returned HTTP 418 to scripts |
+| UGC fake universities (32, Feb 2026) | Dated list | Not loaded in test |
+| eCourts, income tax notice check, CBIC DIN, GST search, cybercrime.gov.in, PIB Fact Check | **Format check + official link only** | Captcha, OTP or login-gated |
+
+No source has an official public API. Atharva re-checks each from an Indian connection on Day 1 and updates this table.
+
+Wording: say "not found in the <list> downloaded on <date>", never "fraud", unless an official source (a SEBI caution, the RBI Alert List) names it.
 
 ## Git workflow
 
