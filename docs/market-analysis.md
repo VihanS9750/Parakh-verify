@@ -54,3 +54,24 @@ Claims to avoid: no "no existing tool does this" (say "none found in our survey"
 The sharpest result is that the market case and the build case point at different products. The money is in investment and adviser fraud, which SEBI's one confirmed-reachable registry covers directly, while the emotionally powerful "fake court or tax notice" demo can only be live at the identifier-validation level, because every official check for it is gated on purpose. A credible Parakh is therefore a registry-backed router with a dated receipt, not a live-automation showpiece, and the honest framing is stronger than overclaiming because judges can probe a captcha-gated registry in seconds.
 
 Two open items would move the pitch most. First, confirm with a human on an Indian connection whether the RBI, NSE and BSE pages work outside the test fetcher, and read site terms before scraping. Second, resolve which loss figure to cite (Rs 22,495 crore via ThePrint/MHA is the most widely reported, the Rs 19,813 crore figure unresolved) by opening the Lok Sabha replies named in the research notes, since no government figure here was read in a primary document.
+
+## Addendum (31 Oct 2026): figures to cite and the feature-gap table
+
+**Use this figure pair in the pitch.** A parliamentary answer by MoS Bandi Sanjay Kumar gives **24,02,579 financial-fraud complaints on NCRP in 2025** (19,18,835 in 2024; 13,10,357 in 2023) and **Rs 22,495 crore** reported lost in 2025 ([Free Press Journal](https://www.freepressjournal.in/amp/mumbai/over-24-lakh-cyber-complaints-22495-crore-fraud-reported-in-2025), [S]; the PIB release itself was not opened). The CFCFRMS rapid-response system is credited with saving **Rs 8,189 crore across 23.61 lakh complaints**, a base that looks cumulative since 2021, not 2025 alone ([Dynamite News](https://www.dynamitenews.com/national/cyber-frauds-mount-to-rs22495-crore-in-2025-over-rs8000-crore-saved-through-rapid-response-system), [S]); a later update says Rs 11,158 crore saved across 32.80 lakh complaints by 30 June 2026 ([Outlook Money](https://www.outlookmoney.com/amp/story/retirement/cyber-fraud-rs-11158-crore-saved-across-328-million-complaints-how-to-report-financial-fraud-on-cybercrime-portal), [S]). Fast reporting saves money, which supports Parakh's "act before you pay" next step ([J]).
+
+**SEBI already has a scam tool, so never claim to be first.** SEBI's investor website and Saa₹thi app offer **"Spot a Scam"**, an interactive tool to assess whether an investment offer might be a scam, alongside SEBI Check for payee bank accounts and UPI handles ([Business Standard](https://www.business-standard.com/amp/markets/capital-market-news/sebi-launches-free-tools-on-site-saarthi-app-to-boost-investor-awareness-125010201020_1.html), [S]; launch date reported as Jan 2024 or Jan 2025; the tool itself was not opened).
+
+**Feature-gap table.** Built from the research notes and news coverage; no tool was tested hands-on. "Not documented" means the research did not find it, not that it is absent.
+
+| Tool | Takes the forward itself | Checks every item in one message | Uses regulators' records | Dated source per result | Next step |
+|---|---|---|---|---|---|
+| Sanchar Saathi (Chakshu) | No, a report form | No | No, telecom only | No verdict | Routes reports; money lost goes to 1930 |
+| Truecaller Scam Checker | Links and numbers; screenshots planned | Not documented | None found | No, own data and community reports | Not documented |
+| SEBI Spot a Scam | No, interactive questions | No | SEBI guidance | Not documented | Not documented |
+| SEBI Check | Payee UPI ID, QR or bank account | No | Yes, SEBI | Not documented | Not documented |
+| RBI Sachet | No, a typed name | No | Yes, registration across RBI, SEBI, IRDAI, PFRDA | Not documented | Complaint filing |
+| PIB Fact Check | Yes, on WhatsApp | Not documented | Government of India claims only, human checkers | Not documented | Not documented |
+| Norton Genie | Yes, text or screenshot | Not documented | None found | Not documented | Yes |
+| **Parakh (target)** | **Yes: screenshot, PDF, text** | **Yes** | **Yes: SEBI, RBI, AMFI, IRDAI, UGC, plus official links** | **Yes** | **Yes, in Hindi plus one more language** |
+
+The column only Parakh fills is "checks every item in one message against regulators' records with a dated source". That is the claim to make, and the hero demo should prove it live.

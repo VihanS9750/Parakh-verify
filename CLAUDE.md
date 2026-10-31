@@ -10,7 +10,11 @@ Someone forwards a scary notice, a stock tip, an adviser's details or a loan app
 2. the source links it checked, with the time of each check,
 3. what to do next (for example, call 1930 or report on cybercrime.gov.in).
 
-Market context and competitors: [docs/market-analysis.md](docs/market-analysis.md).
+Pitch line: **"Don't trust the forward. Verify the evidence."** The product is the verification engine, not a chatbot. We sell the quality of each investigation, not the number of sources.
+
+**Hero feature: one forward, many checks.** Given "Invest ₹50,000 with ABC Investments. Our SEBI-registered adviser guarantees 4% monthly returns. Download our app here.", Parakh extracts every item (firm, adviser registration, the return claim, the app), checks each against the right record, and returns one consolidated report. Build and demo this path first.
+
+We are not first. SEBI's "Spot a Scam" and SEBI Check, RBI Sachet and Truecaller's Scam Checker each cover a slice. Our edge is: the forward itself as input, every item checked, one dated evidence report. Market context and competitors: [docs/market-analysis.md](docs/market-analysis.md).
 
 ## Hard rules (breaking 1–4 disqualifies the team)
 
@@ -45,24 +49,40 @@ Every connector is one function in `connectors/<source>.py` that returns this di
 ```python
 {
     "source": "SEBI investment adviser register",
+    "organisation": "SEBI",
     "query": "29K Investment Advisers",
     "status": "found",          # found | not_found | unavailable | needs_user
     "matches": [{"name": "29K INVESTMENT ADVISERS PRIVATE LTD", "id": "INA200000365", "score": 97}],
     "source_url": "https://www.sebi.gov.in/...",
     "checked_at": "2026-10-31T14:32:05+05:30",
+    "limitations": "Covers SEBI-registered investment advisers only; absence is not proof of fraud.",
 }
 ```
+
+`score` is the match confidence (0–100) shown to the user.
 
 - `unavailable`: the site timed out or errored (time out after a few seconds, retry once).
 - `needs_user`: the source is gated (captcha/OTP), so we return the official link for the user to confirm there.
 - Each connector file ends with an `if __name__ == "__main__":` block that runs one **live** lookup and asserts the shape. That is our only test per connector.
 
-The agent turns connector results into one of four verdicts:
+**The verdict is decided by plain code rules, never by Claude.** Claude only extracts items from the forward, chooses which connectors to call, and explains the result in plain language. Per item:
 
-1. Matches the official record
-2. Not found in the official record
-3. Warning signs (no register applies, for example a "digital arrest" call)
-4. Couldn't verify right now (a source is down)
+1. **Matched:** exact ID match, or name + ID match
+2. **Needs clarification:** several close matches, or the name matches but the ID doesn't
+3. **Not found in the checked register:** the search succeeded and returned nothing (never "fraud")
+4. **Couldn't verify:** source unavailable or gated, so give the official link
+
+Claims get separate **warning signs** (guaranteed returns, urgency, secrecy, "pay to avoid arrest", payment handle of a claimed adviser not ending in "@valid").
+
+Careful with what a match means:
+- A lender being a registered NBFC does **not** make an app claiming to work with it legitimate. Check the app–lender link in RBI's digital lending app list.
+- A court case involving a person or firm does **not** mean they are fraudulent.
+
+Translate the next steps, not just the verdict (Hindi plus one more language).
+
+## How we measure it
+
+Run 20 real forwards and report: items extracted correctly, right source chosen, checks that succeeded, false alarms, average time, and correct "couldn't verify" answers. Abstaining correctly counts as a win.
 
 ## Planned layout
 
