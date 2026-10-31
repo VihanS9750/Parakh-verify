@@ -47,3 +47,20 @@ def safe(source, query, source_url, fn):
     except Exception as e:  # noqa: BLE001
         return result(source, query, "unavailable", source_url=source_url,
                       note=f"{type(e).__name__}: {e}"[:200])
+
+
+def http_post(url, data, session=None, timeout=6, retries=1, delay=2, headers=None):
+    """POST with the same short timeout + one retry as http_get."""
+    client = session or requests
+    h = dict(HEADERS)
+    h.update(headers or {})
+    last = None
+    for _ in range(retries + 1):
+        try:
+            r = client.post(url, data=data, timeout=timeout, headers=h)
+            r.raise_for_status()
+            return r
+        except requests.RequestException as e:
+            last = e
+            time.sleep(delay)
+    raise last
