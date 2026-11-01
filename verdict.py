@@ -87,7 +87,8 @@ RED_FLAGS = [
      "Offers money, a refund or a free benefit out of the blue. Refunds and government schemes don't arrive by forwarded message."),
     ("official_via_link",
      r"(?=.*(?:income tax|assessment order|\bGST\b|customs|SEBI|RBI|TRAI|police|court|enforcement|e-?challan|"
-     r"\bRTO\b|government|ministry))(?=.*(?:click|link|https?://|www\.|\.apk|download))",
+     r"\bRTO\b|government|ministry))(?=.*(?:click|link|https?://|www\.|\.apk|download|"
+     r"\.(?:com|net|org|xyz|icu|top|site|online|info|link)\b))",
      "Claims to come from a government body but asks you to act through a link or app. Check notices on the official portal yourself."),
     ("task_job",
      r"part[- ]time job|work from home|earn (?:rs\.?|₹)\s?\d+\s+(?:for each|per)\s+(?:like|task|review)|like (?:youtube )?videos",
