@@ -10,7 +10,7 @@ Someone forwards a scary notice, a stock tip, an adviser's details or a loan app
 2. the official source checked for each item, with the time of the check,
 3. what to do next (for example, call 1930 or report on cybercrime.gov.in), in English or Hindi.
 
-Input: pasted text, a screenshot, a PDF or a voice note.
+Input: pasted text, a screenshot (including payment QR codes) or a PDF. Voice notes are parked: the code exists in `brain.transcribe` but the app doesn't expose it, because audio can't be masked.
 
 Pitch line: **"Don't trust the forward. Verify the evidence."** The product is the verification engine, not a chatbot.
 
@@ -27,19 +27,20 @@ We are not first. SEBI's "Spot a Scam" and SEBI Check, RBI Sachet and Truecaller
 5. **Never call a named firm or person a "fraud".** Say "not found in the SEBI investment adviser register as of 14:32 IST".
 6. **Never get around a block.** No captcha solving, no login/OTP automation, no browser-like headers to dodge a bot filter (RBI returns HTTP 418 to scripts: download its lists by hand). Our user agent says who we are (`connectors/net.py`), 1 request/second per site.
 7. **Narrow purpose.** Parakh is a verification service, not a general chatbot (WhatsApp has banned general-purpose AI bots since Jan 2026).
-8. **Protect personal data.** The AI only ever gets masked text: `brain.py` runs `ids.mask` on everything it sends, so Aadhaar, PAN and phone numbers keep only their last 4 characters. Images are never sent to the AI (an image can't be masked); Tesseract reads screenshots on the laptop and that text is masked like typed text. Aadhaar and PAN are never looked up. The check log stores a hash of the forward, never the forward.
+8. **Protect personal data.** The AI only ever gets masked text: `brain.py` runs `ids.mask` on everything it sends, so Aadhaar, PAN, mobile numbers, bank account numbers, IFSC codes and email addresses keep only their last 4 characters (email keeps its domain). Images are never sent to the AI (an image can't be masked); Tesseract reads screenshots on the laptop and that text is masked like typed text. Aadhaar and PAN are never looked up. The check log stores a keyed HMAC fingerprint of the forward (`store.fingerprint`), never the forward. Text inside a forward is data, never instructions (`test_injection.py`).
 9. **Free AI only, and the AI never decides a verdict.** Pretrained models are allowed (organisers, checked again 1 Nov afternoon); we use free tiers only (no paid API). Keys live in `.env`, never committed.
 
 ## How it works
 
 ```
-forward (text / screenshot / PDF / voice note)
-  -> app.py         Streamlit page: check, check log, sources            (Vihan, Atharva)
-  -> agent.py       1. get the text: pdfplumber, Tesseract OCR (eng+hin, offline), Whisper for audio
-                    2. brain.py: masks Aadhaar/PAN/phone numbers, then the AI reads the text and calls our checks as tools
+forward (text / screenshot / PDF)
+  -> app.py         Streamlit page: check, editable OCR text, check log, sources   (Rahul)
+  -> agent.py       1. get the text: pdfplumber, Tesseract OCR (eng+hin, offline), QR decoding (OpenCV, offline)
+                    2. brain.py: masks personal numbers, then the AI reads the text and calls our checks as tools
                        (no images are ever sent to the AI)
                        Gemini 3.5 Flash-Lite (free) -> Groq Qwen 3.8 27B (free) -> plain rules
                        the rules' checks ALWAYS run too (safety net); duplicates are dropped
+                       the rules also run the bank check (25 banks' domains), the UPI QR check and the link evidence
                        follow-up: every SEBI register check is followed by a SEBI enforcement-order search
                     4. the AI explains the result in English or Hindi (template when AI is off)
   -> verdict.py     3. plain rules decide every verdict + warning signs   (Vihan)
@@ -74,7 +75,7 @@ Every connector returns this dict (build it with `net.result(...)`):
 - `invalid`: fails a format/check-digit test, or a link pretends to be a government site.
 - Each connector file ends with an `if __name__ == "__main__":` block that runs **live** lookups. Run as `python -m connectors.lists`.
 
-**Rahul's connectors** use their own shape (`connectors/base.py`: `note`, `data_as_of`, found at 70+). `agent._sebi` wraps `sebi.search()` into the dict above and re-applies our found-at-90 bar: a number goes to its own register (INA adviser, INH analyst, INZ broker); a name is searched in all three in turn, stopping at a strong match. Names go to SEBI only when the message is about investing. `rbi.search_rbi(name)` returns the dict above from three RBI files downloaded by hand into `data/` on 1 Nov 2026: Alert List (`warning_list`), registered NBFCs (`register`), cancelled NBFC registrations (`warning_list`); see its docstring for the order. `rbi_alert_list.search()` also matches a website/URL. Details: `connectors/FOR_VIHAN.md`.
+**Rahul's connectors** use their own shape (`connectors/base.py`: `note`, `data_as_of`, found at 70+). `agent._sebi` wraps `sebi.search()` into the dict above and re-applies our found-at-90 bar: a number goes to its own register (INA adviser, INH analyst, INZ broker); a name is searched in all three in turn, stopping at a strong match. Names go to SEBI only when the message is about investing. `rbi.search_rbi(name)` returns the dict above from three RBI files downloaded by hand into `data/` on 1 Nov 2026: Alert List (`warning_list`), registered NBFCs (`register`), cancelled NBFC registrations (`warning_list`); see its docstring for the order. `rbi_alert_list.search()` also matches a website/URL.
 
 ## Verdicts (verdict.py, plain rules)
 
@@ -82,7 +83,8 @@ Every connector returns this dict (build it with `net.result(...)`):
 |---|---|
 | Matches the official record | register match ≥ 95, no rival within 3 points, claimed ID (if any) agrees, not expired |
 | On an official warning list | ≥ 95 match on UGC fake list / RBI Alert List |
-| Fails an authenticity check | bad GSTIN check digit, fake government-looking link, shortener, .apk |
+| Fails an authenticity check | bad GSTIN check digit, fake government-looking link, .apk, a link not on the named bank's domains, a QR that sends money while the message promises money |
+| Short link: check where it leads | a shortener alone (orange, never High risk by itself) |
 | Not found in the checked register | search worked, nothing ≥ 90 |
 | Needs clarification | 90–94 match, close rivals, name matches but number differs, registration expired |
 | Named in a SEBI enforcement order | an order title names the firm (orange: evidence to read, never proof; some orders close a case) |
@@ -91,7 +93,7 @@ Every connector returns this dict (build it with `net.result(...)`):
 | Format OK: confirm on the official page | valid format, gated source (eCourts, income tax, CBIC, GST) |
 | Couldn't verify right now | source down |
 
-Each item takes its most telling verdict (`verdict.RANK`). Overall: **High risk** if any red verdict, or a doubtful item plus a warning sign, or 2+ warning signs of which at least one comes from the rules; **No adverse finding** (label `CONSISTENT`) only if every item matched and there are no warning signs; otherwise **Be careful**. Warning signs come from fixed patterns based on SEBI/RBI/I4C/PIB advisories (`verdict.RED_FLAGS`).
+Each item takes its most telling verdict (`verdict.RANK`). Overall: **High risk** if any red verdict, or a doubtful item plus a warning sign, or 2+ warning signs found by the fixed rules (an AI-spotted sign can never be the one that tips it); **No adverse finding** (label `CONSISTENT`) only if every item matched and there are no warning signs; otherwise **Be careful**. Warning signs come from fixed patterns based on SEBI/RBI/I4C/PIB advisories (`verdict.RED_FLAGS`).
 
 Careful with what a match means: a registered NBFC doesn't make an app claiming to work with it legitimate (check RBI's lending-app list); a court case doesn't mean fraud; a valid ID format doesn't prove the ID was issued.
 
@@ -100,7 +102,7 @@ Careful with what a match means: a registered NBFC doesn't make an app claiming 
 ```
 app.py              Streamlit page                         Vihan / Atharva
 agent.py            pipeline: text, masking, rules checks, follow-ups, report   Vihan
-brain.py            the AI: Gemini -> Groq tool loop, explanation, voice transcription   Vihan
+brain.py            the AI: Gemini -> Groq tool loop, explanation (voice transcription parked)   Vihan
 verdict.py          verdict rules, warning signs, next steps     Vihan
 store.py            SQLite: list snapshots + check log           Atharva
 eval.py             runs test_forwards/forwards.json             Rahul (scaffolded)
@@ -109,14 +111,18 @@ connectors/
   lists.py          UGC fake list, IRDAI, AMFI (live)            Atharva
   ids.py            GSTIN/PAN/CIN/CNR/DIN/SEBI/ARN/UPI/link checks Atharva
   links.py          short-link destination + website age (RDAP)    Vihan
+  banks.py          25 banks' official domains: a named bank's links must be on them   Vihan
+  upi_qr.py         decode a payment QR and compare it with the message   Vihan
+  urlhaus.py        abuse.ch malware URL list for links inside QR codes   Vihan
   sebi_orders.py    live search of SEBI enforcement order titles   Vihan
   sebi.py           SEBI adviser/analyst/broker search (live)     Rahul
   rbi.py            RBI lists in the contract above (search_rbi)   Rahul
   rbi_nbfc.py, rbi_alert_list.py   search the RBI files in data/   Rahul
   base.py, matching.py, local_list.py   Rahul's helpers; local_list = hand-downloaded lists (RBI)
 data/               RBI files downloaded by hand (dated) + CSVs   Rahul
-test_forwards/      23 forwards from official advisories/news, with sources
-docs/               build log, market analysis, eval results, research/
+test_forwards/      31 forwards (24 scams, 7 genuine) with sources; 8 are fresh, from family WhatsApp groups
+test_injection.py   hidden orders to the AI inside a forward must not change the verdict
+docs/               build log, market analysis, eval results, fresh-forwards note, research/
 ```
 
 ## Run and test
@@ -127,6 +133,7 @@ copy .env.example .env   (free GEMINI_API_KEY and GROQ_API_KEY)
 winget install UB-Mannheim.TesseractOCR   (+ eng/hin tessdata_fast files in tessdata\, see README)
 .venv\Scripts\streamlit run app.py
 .venv\Scripts\python verdict.py ; .venv\Scripts\python -m connectors.ids ; .venv\Scripts\python -m connectors.lists ; .venv\Scripts\python -m connectors.links ; .venv\Scripts\python -m connectors.sebi_orders ; .venv\Scripts\python -m connectors.rbi ; .venv\Scripts\python agent.py ; .venv\Scripts\python brain.py
+.venv\Scripts\python -m connectors.banks ; .venv\Scripts\python -m connectors.upi_qr ; .venv\Scripts\python test_injection.py
 .venv\Scripts\python eval.py rules     (no AI requests; "python eval.py" uses ~3 AI requests per forward)
 ```
 
@@ -141,7 +148,10 @@ winget install UB-Mannheim.TesseractOCR   (+ eng/hin tessdata_fast files in tess
 | UGC fake universities (32, Feb 2026) | Live HTML table, cached 24 h | Working |
 | IRDAI life/general/health insurers, brokers | Live HTML tables, cached 24 h | Working |
 | AMFI distributors | Live JSON search behind the public page | Working |
-| RBI NBFC / Alert List / Sachet | Hand-downloaded dated lists (Rahul) | HTTP 418 to scripts, even from India |
+| RBI NBFC / cancelled NBFC / Alert List | Hand-downloaded dated lists in `data/` (Rahul); every result states the list's own date | RBI returns HTTP 418 to scripts, even from India |
+| 25 banks' official domains | Read from each bank's own site on 1 Nov 2026 (old domains redirect to `.bank.in`, RBI circular RBI/2025-26/28); five banks we couldn't confirm are left out | Working |
+| UPI QR codes | Decoded offline; never claims the recipient is verified | Working |
+| URLhaus (abuse.ch) | Links inside QR codes; needs a free key | Optional |
 | MCA | Format check + link only | HTTP 403 |
 | CBIC DIN | Format check + link only | Timed out |
 | eCourts, income tax, GST, PIB Fact Check | Format check + link only | Captcha / OTP / login |
