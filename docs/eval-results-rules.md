@@ -1,4 +1,4 @@
-# Parakh evaluation (rules mode)
+# Parakh evaluation (rules only mode)
 
 23 forwards: 20 scam examples from official advisories and news (some partial or rebuilt from descriptions; see test_forwards), 3 genuine messages.
 A regression gate, not a benchmark: too few forwards to claim an accuracy figure.

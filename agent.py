@@ -1,17 +1,25 @@
 """The agent: reads the forward, picks which official checks to run, and builds the report.
 
-Owner: Vihan. Everything runs on this computer with no external AI service. One check = three steps:
-  1. Find every checkable item: ID numbers, UPI IDs and links (connectors/ids.py) and organisation names.
-  2. Pick the right official source for each item from what the message says, and run the checks.
-  3. verdict.py decides every verdict with fixed rules; a template writes the explanation.
-Aadhaar and PAN numbers are never looked up or sent anywhere.
+Owner: Vihan. One check = four steps:
+  1. Get the text: pasted text, PDF text (pdfplumber) and screenshot text (Tesseract OCR, offline).
+  2. Investigate. The AI brain (brain.py) calls our checks as tools; with no key, or if the AI fails,
+     plain rules here find the items and pick the checks instead.
+  3. verdict.py decides every verdict with fixed rules. The AI never decides a verdict.
+  4. The AI explains the result in English or Hindi (a template does it when AI is off).
+Aadhaar and PAN numbers are masked before any text is sent to the AI, and never looked up.
 """
 import io
+import os
 import re
+import shutil
 import time
+from pathlib import Path
 
 import pdfplumber
+import pytesseract
+from PIL import Image
 
+import brain
 import store
 import verdict
 from connectors import ids, lists, net
@@ -111,17 +119,63 @@ def _template_explanation(report):
     return " ".join(lines)
 
 
+# Tesseract: the installer's default place on Windows, or wherever it is on the PATH.
+TESSERACT = shutil.which("tesseract") or r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+TESSDATA = Path(__file__).with_name("tessdata")  # eng + hin language files (see README)
+
+
+def read_image(data):
+    """Offline OCR of a screenshot in English and Hindi. Returns "" if Tesseract isn't installed."""
+    if not Path(TESSERACT).exists():
+        return ""
+    pytesseract.pytesseract.tesseract_cmd = TESSERACT
+    langs = "eng"
+    if (TESSDATA / "hin.traineddata").exists():
+        os.environ["TESSDATA_PREFIX"] = str(TESSDATA)  # tells Tesseract where our language files are
+        langs = "eng+hin"
+    return pytesseract.image_to_string(Image.open(io.BytesIO(data)), lang=langs)
+
+
+def _facts(report):
+    """What the AI may use to explain the result: verdicts and reasons, nothing else."""
+    return {"overall": verdict.HEADLINES[report["headline"]][0],
+            "checks": [{"item": c["item"], "verdict": verdict.VERDICTS[c["verdict"]][0], "reason": c["reason"],
+                        "source": c["result"]["source"], "checked_at": c["result"]["checked_at"]}
+                       for c in report["checks"]],
+            "warning_signs": [f["reason"] for f in report["flags"]]}
+
+
 def run_check(text, files=(), language="en", on_step=print):
-    """The whole pipeline. files = [(filename, bytes, mime type)]; PDFs are read for their text."""
+    """The whole pipeline. files = [(filename, bytes, mime type)]: PDFs and screenshots."""
     start = time.time()
+    images = []
     for name, data, mime in files:
         if mime == "application/pdf":
             with pdfplumber.open(io.BytesIO(data)) as pdf:
                 text += "\n" + "\n".join(p.extract_text() or "" for p in pdf.pages)
-    checks = investigate(text, on_step)
-    flags = verdict.warning_signs(text)
+        elif mime.startswith("image/"):
+            images.append((data, mime))
+            on_step(f"Reading the text in {name}")
+            text += "\n" + read_image(data)
+
+    ai = None
+    if brain.available():
+        found = brain.investigate(ids.mask(text), images, list(TOOLS), _run, on_step)
+        if found:
+            checks, extra, ai = found
+        else:
+            on_step("AI unavailable; switching to rules-only checks.")
+    if not ai:
+        checks, extra = investigate(text, on_step), {}
+
+    flags = verdict.warning_signs(text + "\n" + extra.get("text_in_images", ""))
+    seen = {f["code"] for f in flags}
+    for c in extra.get("claims", []):  # warning signs the AI spotted that our patterns missed
+        if c.get("type") not in seen:
+            seen.add(c.get("type"))
+            flags.append({"code": c.get("type", "other"), "reason": c.get("text", ""), "by": "AI"})
     for c in checks:
-        c["verdict"], c["reason"] = verdict.decide(c["result"])
+        c["verdict"], c["reason"] = verdict.decide(c["result"], c.get("claimed_id", ""))
 
     items = {}
     for c in checks:
@@ -129,15 +183,22 @@ def run_check(text, files=(), language="en", on_step=print):
     items = {item: verdict.item_verdict(keys) for item, keys in items.items()}
     headline = verdict.headline(items.values(), flags)
     report = {"headline": headline, "checks": checks, "items": items, "flags": flags, "language": language,
-              "mode": "rules", "next_steps": verdict.NEXT_STEPS[headline].get(language) or verdict.NEXT_STEPS[headline]["en"]}
+              "summary": extra.get("summary", ""), "mode": f"AI: {ai[2]}" if ai else "rules only",
+              "next_steps": verdict.NEXT_STEPS[headline].get(language) or verdict.NEXT_STEPS[headline]["en"]}
     report["explanation"] = _template_explanation(report)
+    if ai:
+        try:
+            report["explanation"] = brain.explain(ai, _facts(report), language)
+        except brain.openai.OpenAIError:
+            pass  # keep the template explanation
     report["duration_ms"] = int((time.time() - start) * 1000)
     store.log_check(text, headline, [c["verdict"] for c in checks], report["duration_ms"], report["mode"])
     return report
 
 
 if __name__ == "__main__":
-    # Smoke test against live sources.
+    # Rules-only smoke test against live sources (keys hidden so the AI isn't used).
+    brain.PROVIDERS = []
     rep = run_check("Get a degree from Commercial University Ltd in 30 days! Pay registration fee of Rs 5000 "
                     "to ravi.k@okaxis within 24 hours. Details: bit.ly/fastdegree", on_step=lambda s: None)
     verdicts = {c["item"]: c["verdict"] for c in rep["checks"]}

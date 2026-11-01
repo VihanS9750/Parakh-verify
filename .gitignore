@@ -10,3 +10,4 @@ docs/eval-results-*.md.bak
 connectors/adviser_page*
 connectors/saved_resource*
 connectors/advisers.csv
+tessdata/
