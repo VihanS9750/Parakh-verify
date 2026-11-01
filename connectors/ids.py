@@ -99,6 +99,11 @@ def find_ids(text):
 # Not after a letter, digit or "/", so numbers inside IDs (CNR, Income Tax DIN) are left alone.
 PHONE_ANYWHERE = re.compile(r"(?<![\w/])(?:\+?91[\s-]?|0)?[6-9](?:[\s-]?\d){9}(?!\d)"
                             r"|(?<=[A-Za-z.])[6-9]\d{9}(?=@)")  # also inside a UPI ID: kyc.9876543210@ybl
+EMAIL = re.compile(r"[\w.+-]+@([\w-]+(?:\.[\w-]+)*\.[A-Za-z]{2,})")  # a dot after @: a UPI ID (ravi@ybl) has none
+IFSC = re.compile(r"(?<![A-Za-z0-9])[A-Z]{4}0[A-Z0-9]{6}(?![A-Za-z0-9])")
+# 9-18 digits standing alone: a bank account number. Not after a letter, "/" or "." so IDs such as CNR, DIN and
+# SEBI numbers are left alone; already-hidden numbers contain X and no longer match.
+ACCOUNT = re.compile(r"(?<![\w/.])\d{9,18}(?![\w/])")
 HIDDEN = re.compile(r"X{4,}[0-9A-Z]{4}")  # what mask() leaves behind, e.g. XXXXXX3210
 
 
@@ -108,7 +113,10 @@ def mask(text):
     for kind, value in find_ids(text):
         if kind in ("aadhaar", "pan"):  # mobile numbers: PHONE_ANYWHERE below catches more ways of writing them
             text = text.replace(value, "X" * (len(value) - 4) + value[-4:])
-    return PHONE_ANYWHERE.sub(lambda m: "XXXXXX" + re.sub(r"\D", "", m.group(0))[-4:], text)
+    text = PHONE_ANYWHERE.sub(lambda m: "XXXXXX" + re.sub(r"\D", "", m.group(0))[-4:], text)
+    text = EMAIL.sub(lambda m: "XXXX@" + m.group(1), text)  # keep the domain: it can matter, the person doesn't
+    text = IFSC.sub(lambda m: "X" * 7 + m.group(0)[-4:], text)
+    return ACCOUNT.sub(lambda m: "X" * (len(m.group(0)) - 4) + m.group(0)[-4:], text)
 
 
 def check(value, kind=None):
@@ -222,6 +230,9 @@ if __name__ == "__main__":
     kinds = [k for k, _ in find_ids("Pay to 9876543210 or ravi@ybl, SEBI reg INA000017523, see bit.ly/x1")]
     assert kinds == ["sebi_reg", "upi", "phone", "url"], kinds
     assert "ABCPE1234F" not in mask("PAN ABCPE1234F")
+    m = mask("Mail ravi.k@gmail.com, A/c 123456789012 IFSC SBIN0001234, UPI ravi@okaxis, CNR MHAU019876543210, ref ITBA/AST/F/17/2025-26/1035917840")
+    assert m == ("Mail XXXX@gmail.com, A/c XXXXXXXX9012 IFSC XXXXXXX1234, UPI ravi@okaxis, CNR MHAU019876543210, "
+                 "ref ITBA/AST/F/17/2025-26/1035917840"), m
     hidden = mask("Call +91-98765-43210 or 98765 43210, pay 9876543210@ybl or kyc.9876543210@ybl, "
                   "SEBI INA000017523, CNR MHAU019876543210")
     assert hidden == ("Call XXXXXX3210 or XXXXXX3210, pay XXXXXX3210@ybl or kyc.XXXXXX3210@ybl, "
