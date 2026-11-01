@@ -202,6 +202,11 @@ def read_image(data):
     if (TESSDATA / "hin.traineddata").exists():
         os.environ["TESSDATA_PREFIX"] = str(TESSDATA)  # tells Tesseract where our language files are
         langs = "eng+hin"
+    else:
+        try:  # Hindi installed system-wide, as on the hosting server (packages.txt)
+            langs = "eng+hin" if "hin" in pytesseract.get_languages() else "eng"
+        except Exception:  # Tesseract answered badly: English only
+            pass
     return pytesseract.image_to_string(Image.open(io.BytesIO(data)), lang=langs)
 
 
