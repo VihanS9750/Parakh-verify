@@ -16,7 +16,9 @@ VERDICTS = {
     "INVALID": ("Fails an authenticity check", "प्रामाणिकता जाँच में विफल", "red"),
     "NOT_FOUND": ("Not found in the checked register", "जाँचे गए रजिस्टर में नहीं मिला", "orange"),
     "NEEDS_CLARIFICATION": ("Needs clarification", "स्पष्टता ज़रूरी है", "orange"),
+    "IN_SEBI_ORDER": ("Named in a SEBI enforcement order", "SEBI के प्रवर्तन आदेश में नाम है", "orange"),
     "NOT_LISTED": ("Not on the official warning list", "आधिकारिक चेतावनी सूची में नहीं है", "blue"),
+    "NO_SEBI_ORDER": ("No SEBI enforcement order found", "कोई SEBI प्रवर्तन आदेश नहीं मिला", "blue"),
     "CONFIRM_OFFICIALLY": ("Format OK: confirm on the official page", "फ़ॉर्मेट सही है: आधिकारिक पेज पर पुष्टि करें", "blue"),
     "COULDNT_VERIFY": ("Couldn't verify right now", "अभी पुष्टि नहीं हो सकी", "gray"),
 }
@@ -37,6 +39,12 @@ def decide(r, claimed_id=""):
         return "CONFIRM_OFFICIALLY", r["detail"]
 
     top = r["matches"][0] if r["matches"] else None
+    if kind == "orders":  # SEBI enforcement orders: shown as evidence to read, never proof on its own
+        if status == "found":
+            who = "names" if top["score"] >= STRONG else f"names a similar name ({top['score']}% match)"
+            return "IN_SEBI_ORDER", (f"A SEBI order dated {top['id']} {who}: '{top['name']}'. Some orders close a "
+                                     "case, so read it before trusting or paying.")
+        return "NO_SEBI_ORDER", f"No SEBI enforcement order title names '{r['query']}'. That alone doesn't prove it's genuine."
     if kind == "warning_list":
         if status == "found" and top["score"] >= STRONG:
             return "ON_WARNING_LIST", f"'{top['name']}' appears on the {r['source']}. {r['detail']}"
@@ -171,8 +179,8 @@ NEXT_STEPS = {
 
 # When one item has several checks, the most telling verdict wins: any red or doubtful finding first,
 # then a register match (which beats a mere "format OK"), then the neutral ones.
-RANK = ["ON_WARNING_LIST", "INVALID", "NOT_FOUND", "NEEDS_CLARIFICATION", "MATCHED", "COULDNT_VERIFY",
-        "NOT_LISTED", "CONFIRM_OFFICIALLY"]
+RANK = ["ON_WARNING_LIST", "INVALID", "NOT_FOUND", "NEEDS_CLARIFICATION", "IN_SEBI_ORDER", "MATCHED",
+        "COULDNT_VERIFY", "NOT_LISTED", "NO_SEBI_ORDER", "CONFIRM_OFFICIALLY"]
 
 
 def item_verdict(keys):
@@ -216,6 +224,10 @@ if __name__ == "__main__":
                                 {"name": "Sunil Kamdar", "id": "ARN-999", "score": 98}]}
     assert decide(twins)[0] == "NEEDS_CLARIFICATION"
     assert decide(twins, "ARN-108")[0] == "MATCHED"  # the message's own number settles it
+    order = {**reg, "list_type": "orders", "matches": [{"name": "Order in the matter of X", "id": "Mar 27, 2026", "score": 100}]}
+    assert decide(order)[0] == "IN_SEBI_ORDER"
+    assert item_verdict(["MATCHED", "IN_SEBI_ORDER"]) == "IN_SEBI_ORDER"  # registered, but named in an order
+    assert headline(["IN_SEBI_ORDER"], []) == "CAUTION"  # an order alone is evidence to read, not proof
     ai = [{"code": "urgency", "by": "AI"}, {"code": "other", "by": "AI"}]
     assert headline([], ai) == "CAUTION"  # AI alone can't make it high risk
     assert headline([], ai[:1] + [{"code": "threat", "by": "rules"}]) == "HIGH_RISK"

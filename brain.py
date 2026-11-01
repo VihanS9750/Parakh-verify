@@ -58,6 +58,9 @@ SPECS = {
     "search_sebi_registers": ("SEBI registers",
                               "SEBI's registers of investment advisers, research analysts and stock brokers. Give a "
                               "firm's name (all three are searched) or a registration number (INA, INH or INZ + 9 digits)."),
+    "search_sebi_orders": ("SEBI enforcement orders",
+                           "SEBI's published enforcement orders, searched by a firm's or person's name (at least two "
+                           "words). Use for any investment adviser, tip group, trading academy or broker named."),
     "search_rbi_lists": ("RBI lists",
                          "RBI's lists for a company NAME: the forex Alert List, registered NBFCs and cancelled NBFC "
                          "registrations. Use for loans, finance companies and lending apps' companies."),
@@ -83,6 +86,8 @@ How to work:
 - Find every entity and identifier: company or person names, claimed registrations (SEBI, RBI, IRDAI, AMFI, UGC), ID numbers, UPI IDs, links, app names, universities.
 - Use check_identifier on every ID number, UPI ID and link.
 - Pick registers by what the message claims: investment advice, stock tips or brokers -> SEBI registers (AMFI for mutual fund distributors); loans, NBFCs or forex trading platforms -> RBI lists; insurance -> IRDAI; universities or degrees -> the UGC fake list. Only call tools that exist. Don't search a register that doesn't fit: a shop, hospital or government department is in none of them.
+- Only search real names of firms or people. Slogans like "SEBI REGD. TEAM" or "NISM certified" are claims, not names.
+- If a firm's name only appears inside a link (yashtradingacademy.com), search it as words too ("Yash Trading Academy").
 - Registers hold legal company names, not app or brand names, so prefer the legal name if the message gives one.
 - Call independent tools together.
 - Search each name first exactly as written in full, including words like "University", "Ltd" or "State Government University". Don't shorten or tidy it.

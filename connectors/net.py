@@ -39,6 +39,23 @@ def get(url, **params):
                 raise
 
 
+def post(url, data, session=None, headers=None):
+    """POST a public search form with the same rules as get(): honest user agent, 1 request/second, one retry."""
+    host = url.split("/")[2]
+    for attempt in (1, 2):
+        wait = MIN_GAP - (time.time() - _last_hit.get(host, 0))
+        if wait > 0:
+            time.sleep(wait)
+        _last_hit[host] = time.time()
+        try:
+            r = (session or requests).post(url, data=data, headers={**HEADERS, **(headers or {})}, timeout=TIMEOUT)
+            r.raise_for_status()
+            return r
+        except requests.RequestException:
+            if attempt == 2:
+                raise
+
+
 def result(source, organisation, query, status, matches=(), source_url="", limitations="",
            list_type="register", detail="", checked_at=None):
     """The one shape every connector returns (see CLAUDE.md).

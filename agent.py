@@ -22,7 +22,7 @@ from PIL import Image, ImageDraw
 import brain
 import store
 import verdict
-from connectors import ids, links, lists, net
+from connectors import ids, links, lists, net, sebi_orders
 
 try:  # Rahul's connectors
     from connectors import sebi
@@ -73,6 +73,7 @@ TOOLS = {
     "UGC fake university list": lists.search_ugc_fake,
     "IRDAI insurer register": lists.search_irdai,
     "AMFI distributor register": lists.search_amfi,
+    "SEBI enforcement orders": sebi_orders.search_orders,
 }
 if sebi:
     TOOLS["SEBI registers"] = _sebi
@@ -94,7 +95,7 @@ def _run(tool, value):
 PHRASE = re.compile(r"(?:[A-Z][\w&'-]*|\([A-Z]{2,}\))(?:\s+(?:[A-Z][\w&'-]*|\([A-Z]{2,}\)|of|for|and|&))*")
 ORG_WORDS = re.compile(r"\b(?:Pvt|Private|Limited|Ltd|Investments?|Advis[eo]rs?|Advisory|Capital|Securities|"
                        r"Finance|Finserv|Fintech|Insurance|Assurance|Universit(?:y|ies)|Vishwavidyalaya|Wealth|"
-                       r"Research|Loans?|Asset Management|Broking)\b")
+                       r"Research|Loans?|Asset Management|Broking|Academy)\b")
 
 
 def org_names(text):
@@ -154,7 +155,7 @@ def investigate(text, on_step):
         elif mentions_mf:
             add(name, "AMFI distributor register", name)
         elif sebi and about_investing:
-            add(name, "SEBI registers", name)
+            add(name, "SEBI registers", name)  # run_check follows up with SEBI's enforcement orders
     return checks
 
 
@@ -260,6 +261,16 @@ def run_check(text, files=(), language="en", on_step=print):
         rule_checks = investigate(text, on_step)
         same = lambda a, b: a["tool"] == b["tool"] and (a["item"].lower() in b["item"].lower() or b["item"].lower() in a["item"].lower())
         checks = [c for c in checks if not any(same(c, r) for r in rule_checks)] + rule_checks
+
+    # Follow-up step: every firm or person searched in SEBI's registers (by the AI or the rules) is also
+    # searched in SEBI's enforcement orders, whether the registers knew it or not.
+    done = {c["item"].lower() for c in checks if c["tool"] == "SEBI enforcement orders"}
+    for c in list(checks):
+        if c["tool"] == "SEBI registers" and c["item"].lower() not in done and not ids.find_ids(c["item"]):
+            done.add(c["item"].lower())
+            on_step(f"Following up: searching SEBI's enforcement orders for “{c['item']}”")
+            checks.append({"item": c["item"], "tool": "SEBI enforcement orders",
+                           "result": _run("SEBI enforcement orders", c["item"])})
 
     flags = verdict.warning_signs(text + "\n" + extra.get("text_in_images", ""))
     seen = {f["code"] for f in flags}
