@@ -22,7 +22,7 @@ from PIL import Image, ImageDraw
 import brain
 import store
 import verdict
-from connectors import ids, lists, net
+from connectors import ids, links, lists, net
 
 try:  # Rahul's connectors
     from connectors import sebi
@@ -126,10 +126,10 @@ def investigate(text, on_step):
     for kind, value in ids.find_ids(text):
         if kind in ("aadhaar", "pan"):
             continue  # never sent anywhere; nothing to look up
-        if kind == "url" and claim:  # a "government" message: the link must be on a government site
-            on_step(f"Checking “{value}” with the ID and link check")
-            checks.append({"item": value, "tool": "ID and link check",
-                           "result": ids.check_link(value, claim.group(0))})
+        if kind == "url":  # a "government" message's link must be on a government site
+            for tool, fn in (("ID and link check", ids.check_link), ("Website age and redirect check", links.inspect)):
+                on_step(f"Checking “{value}” with the {tool}")
+                checks.append({"item": value, "tool": tool, "result": fn(value, claim.group(0) if claim else "")})
         else:
             add(value, "ID and link check", value)
         if kind == "arn":
@@ -254,6 +254,11 @@ def run_check(text, files=(), language="en", on_step=print):
 
     flags = verdict.warning_signs(text + "\n" + extra.get("text_in_images", ""))
     seen = {f["code"] for f in flags}
+    for c in checks:  # warning signs found by a check, e.g. a website registered last week
+        flag = c["result"].get("flag")
+        if flag and flag["code"] not in seen:
+            seen.add(flag["code"])
+            flags.append(flag)
     for c in extra.get("claims", []):  # warning signs the AI spotted that our patterns missed
         if c.get("type") not in seen:
             seen.add(c.get("type"))
@@ -285,7 +290,7 @@ if __name__ == "__main__":
     brain.PROVIDERS = []
     rep = run_check("Get a degree from Commercial University Ltd in 30 days! Pay registration fee of Rs 5000 "
                     "to ravi.k@okaxis within 24 hours. Details: bit.ly/fastdegree", on_step=lambda s: None)
-    verdicts = {c["item"]: c["verdict"] for c in rep["checks"]}
+    verdicts = rep["items"]  # one verdict per item: the most telling of its checks
     assert verdicts.get("Commercial University Ltd") == "ON_WARNING_LIST", verdicts
     assert verdicts.get("bit.ly/fastdegree") == "INVALID", verdicts
     assert rep["headline"] == "HIGH_RISK", rep["headline"]
