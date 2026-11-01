@@ -29,18 +29,42 @@ try:  # Rahul's connectors
 except ImportError:
     sebi = None
 try:
-    from connectors import rbi
+    from connectors import rbi, rbi_alert_list
 except ImportError:
     rbi = None
 
 
-def _sebi(query):
-    """Rahul's SEBI search, reshaped to our connector contract (net.result)."""
-    r = sebi.search(query, "adviser")
+SEBI_PREFIX = {"INA": "adviser", "INH": "analyst", "INZ": "broker"}
+
+
+def _sebi_one(query, kind):
+    """Rahul's SEBI search of one register, reshaped to our connector contract (net.result)."""
+    r = sebi.search(query, kind)
     status = r["status"] if r["status"] == "unavailable" else lists.status_of(r["matches"])  # found = 90+, like our lists
     return {**r, "status": status, "organisation": "SEBI", "list_type": "register", "detail": r["note"],
-            "limitations": "Live search of SEBI's investment adviser register only. Research analyst and broker "
-                           "registers are not connected yet, so a broker will show as not found here."}
+            "limitations": "Live search of SEBI's register. Equity-segment brokers only; SEBI returns at most 25 "
+                           "records per search, and lists hold legal company names, not app or brand names."}
+
+
+def _sebi(query):
+    """A SEBI number goes to its own register. A name could be an adviser, research analyst or broker, so it is
+    searched in all three, one after another (SEBI asks for 1 request a second), stopping at a strong match."""
+    q = query.strip().upper()
+    if q[:3] in SEBI_PREFIX and q[3:].isdigit():
+        return _sebi_one(q, SEBI_PREFIX[q[:3]])
+    kinds = ["broker", "adviser", "analyst"] if re.search(r"brok|securities|stock", query, re.I) else \
+            ["adviser", "analyst", "broker"]
+    results = []
+    for kind in kinds:
+        results.append(_sebi_one(query, kind))
+        if results[-1]["matches"] and results[-1]["matches"][0]["score"] >= verdict.STRONG:
+            return results[-1]
+    found = [r for r in results if r["status"] == "found"]
+    down = [r for r in results if r["status"] == "unavailable"]
+    if found or not down:  # the closest name across the three registers
+        best = max(found or results, key=lambda r: r["matches"][0]["score"] if r["matches"] else 0)
+        return best if found else {**best, "source": "SEBI registers (advisers, research analysts, brokers)"}
+    return down[0]  # a register didn't answer, so we can't say "not found"
 
 
 # The checks we can run: name -> function taking one string and returning the connector contract.
@@ -51,9 +75,12 @@ TOOLS = {
     "AMFI distributor register": lists.search_amfi,
 }
 if sebi:
-    TOOLS["SEBI adviser register"] = _sebi
+    TOOLS["SEBI registers"] = _sebi
 if rbi:
-    TOOLS["RBI lists"] = rbi.search_rbi
+    TOOLS["RBI lists"] = rbi.search_rbi  # company names: Alert List, registered and cancelled NBFCs
+    TOOLS["RBI forex Alert List"] = lambda q: rbi._convert(  # a platform's name or website
+        rbi_alert_list.search(q), "warning_list",
+        "RBI's Alert List is not exhaustive: not being on it doesn't mean a platform is authorised.")
 
 
 def _run(tool, value):
@@ -94,9 +121,15 @@ def investigate(text, on_step):
         add(value, "ID and link check", value)
         if kind == "arn":
             add(value, "AMFI distributor register", value)
-        if kind == "sebi_reg" and value.upper().startswith("INA") and sebi:
-            add(value, "SEBI adviser register", value)
+        if kind == "sebi_reg" and value.upper()[:3] in SEBI_PREFIX and sebi:
+            add(value, "SEBI registers", value)
+        if kind == "url" and rbi and re.search(r"forex|currency|trading|crypto|binary|dollar|\bfx\b", text, re.I):
+            add(value, "RBI forex Alert List", value)
     mentions_mf = re.search(r"mutual fund|\bAMFI\b|\bARN\b|distributor", text, re.I)
+    # Only search SEBI when the message is about investing: a shop or a hospital is never in SEBI's registers,
+    # and "not found" there would sound like an accusation.
+    about_investing = re.search(r"\bSEBI\b|invest|stock|share market|trading|demat|portfolio|returns?\b|profit|"
+                                r"tips?\b|broker|advis", text, re.I)
     for name in org_names(text):
         low = name.lower()
         if "universit" in low or "vishwavidyalaya" in low:
@@ -107,8 +140,8 @@ def investigate(text, on_step):
             add(name, "RBI lists", name)
         elif mentions_mf:
             add(name, "AMFI distributor register", name)
-        elif sebi:
-            add(name, "SEBI adviser register", name)
+        elif sebi and about_investing:
+            add(name, "SEBI registers", name)
     return checks
 
 

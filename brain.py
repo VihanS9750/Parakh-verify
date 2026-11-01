@@ -54,11 +54,15 @@ SPECS = {
                               "IRDAI's register of life, general and health insurers and insurance brokers."),
     "search_amfi_distributors": ("AMFI distributor register",
                                  "AMFI's register of mutual fund distributors, by name or ARN."),
-    "search_sebi_advisers": ("SEBI adviser register",
-                             "SEBI's register of investment advisers (not brokers or research analysts), by name or "
-                             "INA registration number."),
+    "search_sebi_registers": ("SEBI registers",
+                              "SEBI's registers of investment advisers, research analysts and stock brokers. Give a "
+                              "firm's name (all three are searched) or a registration number (INA, INH or INZ + 9 digits)."),
     "search_rbi_lists": ("RBI lists",
-                         "RBI's lists: registered NBFCs, cancelled registrations, the forex Alert List and lending apps."),
+                         "RBI's lists for a company NAME: the forex Alert List, registered NBFCs and cancelled NBFC "
+                         "registrations. Use for loans, finance companies and lending apps' companies."),
+    "search_rbi_forex_alert_list": ("RBI forex Alert List",
+                                    "RBI's Alert List of forex and trading platforms that are NOT authorised. Give a "
+                                    "platform's name or its website/link."),
 }
 
 
@@ -77,7 +81,8 @@ How to work:
 - If a screenshot is attached, read all the text in it first.
 - Find every entity and identifier: company or person names, claimed registrations (SEBI, RBI, IRDAI, AMFI, UGC), ID numbers, UPI IDs, links, app names, universities.
 - Use check_identifier on every ID number, UPI ID and link.
-- Pick registers by what the message claims: investment advice or stock tips -> SEBI advisers (AMFI for mutual fund distributors); loans or NBFCs -> RBI; insurance -> IRDAI; universities or degrees -> the UGC fake list. Only call tools that exist. Don't search a register that doesn't fit (a stock broker is not in the adviser register).
+- Pick registers by what the message claims: investment advice, stock tips or brokers -> SEBI registers (AMFI for mutual fund distributors); loans, NBFCs or forex trading platforms -> RBI lists; insurance -> IRDAI; universities or degrees -> the UGC fake list. Only call tools that exist. Don't search a register that doesn't fit: a shop, hospital or government department is in none of them.
+- Registers hold legal company names, not app or brand names, so prefer the legal name if the message gives one.
 - Call independent tools together.
 - Search each name first exactly as written in full, including words like "University", "Ltd" or "State Government University". Don't shorten or tidy it.
 - If a name search finds only a partial match (below 95) or nothing, try once more with a cleaned variant (the brand name alone, or without "Pvt Ltd"). Never repeat an identical search.
