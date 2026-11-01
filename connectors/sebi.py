@@ -8,9 +8,9 @@ import time
 import requests
 from bs4 import BeautifulSoup
 
-from base import HEADERS, http_post, result, safe
-from local_list import search_list
-from matching import best_matches, find_by_id
+from connectors.base import HEADERS, http_post, result, safe
+from connectors.local_list import search_list
+from connectors.matching import best_matches, find_by_id
 
 SOURCES = {
     "adviser": {"label": "SEBI investment adviser register", "prefix": "INA"},
@@ -135,9 +135,9 @@ def search(query, kind="adviser", csv_path=None, downloaded_on=None):
 
 if __name__ == "__main__":
     import json, sys
-    # python sebi.py "29K Investment Advisers"        -> live search
-    # python sebi.py "query" advisers.csv             -> offline backup
-    # python sebi.py build saved.html advisers.csv    -> make the backup CSV
+    # python -m connectors.sebi "29K Investment Advisers"        -> live search
+    # python -m connectors.sebi "query" advisers.csv             -> offline backup
+    # python -m connectors.sebi build saved.html advisers.csv    -> make the backup CSV
     if sys.argv[1] == "build":
         print(html_to_csv(sys.argv[2], sys.argv[3]), "records saved")
     else:
