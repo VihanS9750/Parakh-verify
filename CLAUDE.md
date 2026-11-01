@@ -27,25 +27,25 @@ We are not first. SEBI's "Spot a Scam" and SEBI Check, RBI Sachet and Truecaller
 5. **Never call a named firm or person a "fraud".** Say "not found in the SEBI investment adviser register as of 14:32 IST".
 6. **Never get around a block.** No captcha solving, no login/OTP automation, no browser-like headers to dodge a bot filter (RBI returns HTTP 418 to scripts: download its lists by hand). Our user agent says who we are (`connectors/net.py`), 1 request/second per site.
 7. **Narrow purpose.** Parakh is a verification service, not a general chatbot (WhatsApp has banned general-purpose AI bots since Jan 2026).
-8. **Protect personal data.** The AI only ever gets masked text: `brain.py` runs `ids.mask` on everything it sends, so Aadhaar, PAN, mobile numbers, bank account numbers, IFSC codes and email addresses keep only their last 4 characters (email keeps its domain). Images are never sent to the AI (an image can't be masked); Tesseract reads screenshots on the laptop and that text is masked like typed text. Aadhaar and PAN are never looked up. The check log stores a keyed HMAC fingerprint of the forward (`store.fingerprint`), never the forward. Text inside a forward is data, never instructions (`test_injection.py`).
+8. **Protect personal data.** The AI only ever gets masked text: `brain.py` runs `ids.mask` on everything it sends, so Aadhaar, PAN, mobile numbers, bank account numbers, IFSC codes and email addresses keep only their last 4 characters (email keeps its domain). Images are never sent to the AI (an image can't be masked); Tesseract reads screenshots on the laptop and that text is masked like typed text. Aadhaar and PAN are never looked up. Nothing is logged: no message, screenshot or history of checks is saved. The only stored user-related data is the QR handle memory in `store.py` (a hash of a payment handle). Text inside a forward is data, never instructions (`test_injection.py`).
 9. **Free AI only, and the AI never decides a verdict.** Pretrained models are allowed (organisers, checked again 1 Nov afternoon); we use free tiers only (no paid API). Keys live in `.env`, never committed.
 
 ## How it works
 
 ```
 forward (text / screenshot / PDF)
-  -> app.py         Streamlit page: check, editable OCR text, check log, sources   (Rahul)
+  -> app.py         Streamlit app: check (input, loading, report), how to use, how it works, sources   (Rahul)
   -> agent.py       1. get the text: pdfplumber, Tesseract OCR (eng+hin, offline), QR decoding (OpenCV, offline)
                     2. brain.py: masks personal numbers, then the AI reads the text and calls our checks as tools
                        (no images are ever sent to the AI)
-                       Gemini 3.5 Flash-Lite (free tier) -> plain rules if it fails or has no key
+                       Gemini free tier, three models in turn (daily limits are per model) -> plain rules if all fail or no key
                        the rules' checks ALWAYS run too (safety net); duplicates are dropped
                        the rules also run the bank check (25 banks' domains), the UPI QR check and the link evidence
                        follow-up: every SEBI register check is followed by a SEBI enforcement-order search
                     4. the AI explains the result in English or Hindi (template when AI is off)
   -> verdict.py     3. plain rules decide every verdict + warning signs   (Vihan)
   -> connectors/    one function per official source                     (Rahul: SEBI/RBI, Atharva: rest)
-  -> store.py       SQLite: dated copies of lists + check log              (Atharva)
+  -> store.py       SQLite: dated copies of lists + QR handle memory (hashes)   (Atharva)
 ```
 
 The AI may add warning signs it spots (labelled "spotted by AI"), but they can only back up a rule-based finding: AI signs alone never make a message High risk (`verdict.headline`).
@@ -104,7 +104,7 @@ app.py              Streamlit page: check, editable OCR text, log, sources   Rah
 agent.py            pipeline: text, masking, rules checks, follow-ups, report   Vihan
 brain.py            the AI: Gemini tool loop and explanation   Vihan
 verdict.py          verdict rules, warning signs, next steps     Vihan
-store.py            SQLite: list snapshots + check log           Atharva
+store.py            SQLite: list snapshots + QR handle memory (hashes)   Atharva
 eval.py             runs test_forwards/forwards.json             Rahul
 connectors/
   net.py            polite GET + result() shape                  Atharva

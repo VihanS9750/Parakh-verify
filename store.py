@@ -1,13 +1,11 @@
-"""SQLite store: dated copies of official lists, and a log of every check.
+"""SQLite store: dated copies of official lists.
 
 Owner: Atharva.
-- snapshots: the latest copy of each official list, with the time we fetched it.
-- checks:    one row per check. We keep a hash of the forward, never the forward itself.
+- snapshots:        the latest copy of each official list, with the time we fetched it.
+- handle_sightings: a QR payment handle seen before, kept as hashes only (see remember_handle).
+Nothing else is saved: no history of checks, and never a message or screenshot.
 """
 import hashlib
-import hmac
-import os
-import secrets
 import json
 import sqlite3
 import time
@@ -22,9 +20,6 @@ def _db():
     con = sqlite3.connect(DB)
     con.execute("""CREATE TABLE IF NOT EXISTS snapshots (
         source TEXT PRIMARY KEY, rows TEXT, fetched_at TEXT, saved_ts REAL, as_on TEXT)""")
-    con.execute("""CREATE TABLE IF NOT EXISTS checks (
-        id INTEGER PRIMARY KEY, created_at TEXT, input_hash TEXT, headline TEXT,
-        n_items INTEGER, verdicts TEXT, duration_ms INTEGER, mode TEXT)""")
     con.execute("""CREATE TABLE IF NOT EXISTS handle_sightings (
         handle_hash TEXT, input_hash TEXT, claim TEXT, seen_at TEXT, PRIMARY KEY (handle_hash, input_hash))""")
     return con
@@ -64,32 +59,6 @@ def clear_snapshots():
     con = _db()
     con.execute("DELETE FROM snapshots")
     con.commit()
-
-
-KEY_FILE = Path(__file__).with_name(".parakh_log_key")  # made on first use, kept on this computer, never committed
-
-
-def fingerprint(text):
-    """A keyed hash (HMAC) of a forward. Plain SHA-256 can be guessed for a known message; without the key it can't."""
-    key = os.environ.get("PARAKH_LOG_KEY") or (KEY_FILE.read_text() if KEY_FILE.exists() else "")
-    if not key:
-        key = secrets.token_hex(16)
-        KEY_FILE.write_text(key)
-    return hmac.new(key.encode(), text.encode(), hashlib.sha256).hexdigest()[:16]
-
-
-def log_check(forward_text, headline, verdicts, duration_ms, mode):
-    digest = fingerprint(forward_text)
-    con = _db()
-    con.execute("INSERT INTO checks (created_at, input_hash, headline, n_items, verdicts, duration_ms, mode) "
-                "VALUES (?,?,?,?,?,?,?)",
-                (now(), digest, headline, len(verdicts), json.dumps(verdicts), duration_ms, mode))
-    con.commit()
-
-
-def recent_checks(limit=50):
-    return _db().execute("SELECT created_at, headline, n_items, verdicts, duration_ms, mode, input_hash "
-                         "FROM checks ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
 
 
 def remember_handle(handle, claim, forward_text):

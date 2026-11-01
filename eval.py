@@ -1,7 +1,7 @@
 """Run every test forward through Parakh and report how it did.
 
 Owner: Rahul (Day 2 task, scaffolded here). Run:  python eval.py
-This is a regression gate, not a benchmark: 23 forwards is too few to claim an accuracy figure, so we
+This is a regression gate, not a benchmark: 31 forwards is too few to claim an accuracy figure, so we
 report counts with Wilson 95% intervals and keep "couldn't decide" separate from right and wrong.
 """
 import json

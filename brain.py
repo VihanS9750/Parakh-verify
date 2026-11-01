@@ -16,9 +16,13 @@ import openai
 
 from connectors import ids
 
-# (name, key in .env, address, model). Change the model with GEMINI_MODEL in .env.
+# (name, key in .env, address, model). The free tier counts requests per model per day, so when one model's
+# allowance is used up the next Gemini model takes over; all of them are free. Change the first with GEMINI_MODEL.
+GEMINI = "https://generativelanguage.googleapis.com/v1beta/openai/"
 PROVIDERS = [
-    ("Gemini", "GEMINI_API_KEY", "https://generativelanguage.googleapis.com/v1beta/openai/", "gemini-3.5-flash-lite"),
+    ("Gemini", "GEMINI_API_KEY", GEMINI, "gemini-3.1-flash-lite"),
+    ("Gemini 2", "GEMINI_API_KEY", GEMINI, "gemini-3.5-flash-lite"),
+    ("Gemini 3", "GEMINI_API_KEY", GEMINI, "gemini-3.5-flash"),
 ]
 MAX_ROUNDS = 6  # tool-calling rounds before we stop the investigation
 CLAIM_TYPES = {"guaranteed_returns", "urgency", "threat", "pay_to_resolve", "kyc_block", "secrecy",
