@@ -69,16 +69,33 @@ def _sebi(query):
     return down[0]  # a register didn't answer, so we can't say "not found"
 
 
+_answers = {}  # ponytail: in memory, kept while the app runs; a dated SQLite copy if restarts become common
+
+
+def _remembered(fn):
+    """Keep a slow live search's answer, so the same name checked again (e.g. in a demo) is instant.
+    The answer keeps its original checked_at time. A failed lookup is never kept."""
+    def run(query):
+        key = (fn.__name__, " ".join(query.lower().split()))
+        if key not in _answers:
+            r = fn(query)
+            if r["status"] == "unavailable":
+                return r
+            _answers[key] = r
+        return _answers[key]
+    return run
+
+
 # The checks we can run: name -> function taking one string and returning the connector contract.
 TOOLS = {
     "ID and link check": ids.check,
     "UGC fake university list": lists.search_ugc_fake,
     "IRDAI insurer register": lists.search_irdai,
     "AMFI distributor register": lists.search_amfi,
-    "SEBI enforcement orders": sebi_orders.search_orders,
+    "SEBI enforcement orders": _remembered(sebi_orders.search_orders),
 }
 if sebi:
-    TOOLS["SEBI registers"] = _sebi
+    TOOLS["SEBI registers"] = _remembered(_sebi)  # up to 3 live searches at 1 a second: the slowest check
 if rbi:
     TOOLS["RBI lists"] = rbi.search_rbi  # company names: Alert List, registered and cancelled NBFCs
     TOOLS["RBI forex Alert List"] = lambda q: rbi._convert(  # a platform's name or website
