@@ -6,9 +6,14 @@ report counts with Wilson 95% intervals and keep "couldn't decide" separate from
 """
 import json
 import math
+import sys
 from pathlib import Path
 
 import agent
+import brain
+
+if "rules" in sys.argv[1:]:  # python eval.py rules: plain rules only, no AI requests
+    brain.PROVIDERS = []
 
 HERE = Path(__file__).parent
 
@@ -65,7 +70,7 @@ def main():
     ] + [f"| {r['id']} | {'yes' if r['scam'] else 'no'} | {r['headline']} | "
          f"{'; '.join(f'{k}: {v}' for k, v in r['items'].items()) or '-'} | {', '.join(r['flags']) or '-'} |"
          for r in rows]
-    out = HERE / "docs" / f"eval-results-{rows[0]['mode'].split()[0].lower()}.md"
+    out = HERE / "docs" / f"eval-results-{'ai' if rows[0]['mode'].startswith('AI') else 'rules'}.md"
     out.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("\n".join(lines[:13]))
     print(f"\nSaved to {out}")

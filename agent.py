@@ -6,7 +6,9 @@ Owner: Vihan. One check = four steps:
      plain rules here find the items and pick the checks instead.
   3. verdict.py decides every verdict with fixed rules. The AI never decides a verdict.
   4. The AI explains the result in English or Hindi (a template does it when AI is off).
-Aadhaar and PAN numbers are masked before any text is sent to the AI, and never looked up.
+The AI only ever gets masked text: Aadhaar, PAN and mobile numbers keep just their last 4 characters
+(ids.mask, applied inside brain.py). Screenshots are read here (OCR) and never sent to the AI: an image
+can't be masked. Aadhaar and PAN are never looked up.
 """
 import io
 import os
@@ -22,25 +24,66 @@ from PIL import Image
 import brain
 import store
 import verdict
-from connectors import ids, lists, net
+from connectors import ids, links, lists, net, sebi_orders
 
 try:  # Rahul's connectors
     from connectors import sebi
 except ImportError:
     sebi = None
 try:
-    from connectors import rbi
+    from connectors import rbi, rbi_alert_list
 except ImportError:
     rbi = None
 
 
-def _sebi(query):
-    """Rahul's SEBI search, reshaped to our connector contract (net.result)."""
-    r = sebi.search(query, "adviser")
+SEBI_PREFIX = {"INA": "adviser", "INH": "analyst", "INZ": "broker"}
+
+
+def _sebi_one(query, kind):
+    """Rahul's SEBI search of one register, reshaped to our connector contract (net.result)."""
+    r = sebi.search(query, kind)
     status = r["status"] if r["status"] == "unavailable" else lists.status_of(r["matches"])  # found = 90+, like our lists
     return {**r, "status": status, "organisation": "SEBI", "list_type": "register", "detail": r["note"],
-            "limitations": "Live search of SEBI's investment adviser register only. Research analyst and broker "
-                           "registers are not connected yet, so a broker will show as not found here."}
+            "limitations": "Live search of SEBI's register. Equity-segment brokers only; SEBI returns at most 25 "
+                           "records per search, and lists hold legal company names, not app or brand names."}
+
+
+def _sebi(query):
+    """A SEBI number goes to its own register. A name could be an adviser, research analyst or broker, so it is
+    searched in all three, one after another (SEBI asks for 1 request a second), stopping at a strong match."""
+    q = query.strip().upper()
+    if q[:3] in SEBI_PREFIX and q[3:].isdigit():
+        return _sebi_one(q, SEBI_PREFIX[q[:3]])
+    kinds = ["broker", "adviser", "analyst"] if re.search(r"brok|securities|stock", query, re.I) else \
+            ["adviser", "analyst", "broker"]
+    results = []
+    for kind in kinds:
+        results.append(_sebi_one(query, kind))
+        if results[-1]["matches"] and results[-1]["matches"][0]["score"] >= verdict.STRONG:
+            return results[-1]
+    found = [r for r in results if r["status"] == "found"]
+    down = [r for r in results if r["status"] == "unavailable"]
+    if found or not down:  # the closest name across the three registers
+        best = max(found or results, key=lambda r: r["matches"][0]["score"] if r["matches"] else 0)
+        return best if found else {**best, "source": "SEBI registers (advisers, research analysts, brokers)"}
+    return down[0]  # a register didn't answer, so we can't say "not found"
+
+
+_answers = {}  # ponytail: in memory, kept while the app runs; a dated SQLite copy if restarts become common
+
+
+def _remembered(fn):
+    """Keep a slow live search's answer, so the same name checked again (e.g. in a demo) is instant.
+    The answer keeps its original checked_at time. A failed lookup is never kept."""
+    def run(query):
+        key = (fn.__name__, " ".join(query.lower().split()))
+        if key not in _answers:
+            r = fn(query)
+            if r["status"] == "unavailable":
+                return r
+            _answers[key] = r
+        return _answers[key]
+    return run
 
 
 # The checks we can run: name -> function taking one string and returning the connector contract.
@@ -49,11 +92,15 @@ TOOLS = {
     "UGC fake university list": lists.search_ugc_fake,
     "IRDAI insurer register": lists.search_irdai,
     "AMFI distributor register": lists.search_amfi,
+    "SEBI enforcement orders": _remembered(sebi_orders.search_orders),
 }
 if sebi:
-    TOOLS["SEBI adviser register"] = _sebi
+    TOOLS["SEBI registers"] = _remembered(_sebi)  # up to 3 live searches at 1 a second: the slowest check
 if rbi:
-    TOOLS["RBI lists"] = rbi.search_rbi
+    TOOLS["RBI lists"] = rbi.search_rbi  # company names: Alert List, registered and cancelled NBFCs
+    TOOLS["RBI forex Alert List"] = lambda q: rbi._convert(  # a platform's name or website
+        rbi_alert_list.search(q), "warning_list",
+        "RBI's Alert List is not exhaustive: not being on it doesn't mean a platform is authorised.")
 
 
 def _run(tool, value):
@@ -67,22 +114,30 @@ def _run(tool, value):
 PHRASE = re.compile(r"(?:[A-Z][\w&'-]*|\([A-Z]{2,}\))(?:\s+(?:[A-Z][\w&'-]*|\([A-Z]{2,}\)|of|for|and|&))*")
 ORG_WORDS = re.compile(r"\b(?:Pvt|Private|Limited|Ltd|Investments?|Advis[eo]rs?|Advisory|Capital|Securities|"
                        r"Finance|Finserv|Fintech|Insurance|Assurance|Universit(?:y|ies)|Vishwavidyalaya|Wealth|"
-                       r"Research|Loans?|Asset Management|Broking)\b")
+                       r"Research|Loans?|Asset Management|Broking|Academy)\b")
 
 
 def org_names(text):
     names = []
     text = re.sub(r"\b(Pvt|Ltd|Co|Inc|No|Regn)\.", r"\1", text)  # so a full stop can end a phrase
     for m in PHRASE.finditer(text):
-        name = re.sub(r"\s+(?:of|for|and|&)$", "", m.group(0).strip(" .,"))
+        name = re.sub(r"\s+(?:of|for|and|&)$", "", " ".join(m.group(0).split()).strip(" .,"))  # one line, even across OCR line breaks
         if len(name.split()) >= 2 and ORG_WORDS.search(name) and name not in names:
             names.append(name)
     return names
 
 
+# A message presenting itself as coming from a government body. SEBI and RBI are left out on purpose:
+# genuine brokers and lenders write "SEBI registered" or "RBI registered NBFC" all the time.
+GOV_CLAIM = re.compile(r"income ?tax department|assessment order|\bGST (?:department|council)|customs department|"
+                       r"\bpolice\b|cyber ?cell|\bcourt\b|e-?challan|\bRTO\b|traffic police|\bTRAI\b|\bEPFO\b|"
+                       r"\bUIDAI\b|ministry of|government of india|india post|\bCBI\b|enforcement directorate", re.I)
+
+
 def investigate(text, on_step):
     """Regexes find IDs and organisation names; keywords in the message pick the register for each."""
     checks = []
+    claim = GOV_CLAIM.search(text)
 
     def add(item, tool, value):
         on_step(f"Checking “{item}” with the {tool}")
@@ -91,12 +146,23 @@ def investigate(text, on_step):
     for kind, value in ids.find_ids(text):
         if kind in ("aadhaar", "pan"):
             continue  # never sent anywhere; nothing to look up
-        add(value, "ID and link check", value)
+        if kind == "url":  # a "government" message's link must be on a government site
+            for tool, fn in (("ID and link check", ids.check_link), ("Website age and redirect check", links.inspect)):
+                on_step(f"Checking “{value}” with the {tool}")
+                checks.append({"item": value, "tool": tool, "result": fn(value, claim.group(0) if claim else "")})
+        else:
+            add(value, "ID and link check", value)
         if kind == "arn":
             add(value, "AMFI distributor register", value)
-        if kind == "sebi_reg" and value.upper().startswith("INA") and sebi:
-            add(value, "SEBI adviser register", value)
+        if kind == "sebi_reg" and value.upper()[:3] in SEBI_PREFIX and sebi:
+            add(value, "SEBI registers", value)
+        if kind == "url" and rbi and re.search(r"forex|currency|trading|crypto|binary|dollar|\bfx\b", text, re.I):
+            add(value, "RBI forex Alert List", value)
     mentions_mf = re.search(r"mutual fund|\bAMFI\b|\bARN\b|distributor", text, re.I)
+    # Only search SEBI when the message is about investing: a shop or a hospital is never in SEBI's registers,
+    # and "not found" there would sound like an accusation.
+    about_investing = re.search(r"\bSEBI\b|invest|stock|share market|trading|demat|portfolio|returns?\b|profit|"
+                                r"tips?\b|broker|advis", text, re.I)
     for name in org_names(text):
         low = name.lower()
         if "universit" in low or "vishwavidyalaya" in low:
@@ -107,8 +173,8 @@ def investigate(text, on_step):
             add(name, "RBI lists", name)
         elif mentions_mf:
             add(name, "AMFI distributor register", name)
-        elif sebi:
-            add(name, "SEBI adviser register", name)
+        elif sebi and about_investing:
+            add(name, "SEBI registers", name)  # run_check follows up with SEBI's enforcement orders
     return checks
 
 
@@ -146,30 +212,65 @@ def _facts(report):
 
 
 def run_check(text, files=(), language="en", on_step=print):
-    """The whole pipeline. files = [(filename, bytes, mime type)]: PDFs and screenshots."""
+    """The whole pipeline. files = [(filename, bytes, mime type)]: PDFs, screenshots and voice notes."""
     start = time.time()
-    images = []
     for name, data, mime in files:
         if mime == "application/pdf":
             with pdfplumber.open(io.BytesIO(data)) as pdf:
                 text += "\n" + "\n".join(p.extract_text() or "" for p in pdf.pages)
-        elif mime.startswith("image/"):
-            images.append((data, mime))
+        elif mime.startswith("image/"):  # read here, never sent anywhere: an image can't be masked
             on_step(f"Reading the text in {name}")
-            text += "\n" + read_image(data)
+            image_text = read_image(data)
+            if not image_text.strip():
+                on_step(f"Couldn't read any text in {name}" +
+                        ("" if Path(TESSERACT).exists() else " (Tesseract isn't installed, see README)") +
+                        ". Screenshots are never sent to the AI, so paste the text instead.")
+            text += "\n" + image_text
+        elif mime.startswith("audio/"):  # parked: not reachable from the app yet (voice notes come after text + images)
+            on_step(f"Listening to {name}")
+            try:
+                heard = brain.transcribe(data, name)
+            except brain.openai.OpenAIError as e:
+                heard = ""
+                on_step(f"Couldn't transcribe it ({type(e).__name__}).")
+            text += "\n" + heard
+            on_step(f"Heard: “{heard[:160]}”" if heard else "No speech-to-text available (needs GROQ_API_KEY).")
 
     ai = None
-    if brain.available():
-        found = brain.investigate(ids.mask(text), images, list(TOOLS), _run, on_step)
+    if brain.available() and text.strip():
+        # Only masked text leaves this computer: brain.py runs ids.mask on everything it sends; no images.
+        found = brain.investigate(text, list(TOOLS), _run, on_step)
         if found:
             checks, extra, ai = found
         else:
             on_step("AI unavailable; switching to rules-only checks.")
     if not ai:
         checks, extra = investigate(text, on_step), {}
+    else:
+        # Safety net: the rules' checks run too, so a name the AI shortened or skipped is still checked in full.
+        # An AI check is dropped when the rules checked the same thing with the same source
+        # (one item contains the other, e.g. "AIIPHS" in the full name, or "U651..." in "CIN: U651...").
+        rule_checks = investigate(text, on_step)
+        same = lambda a, b: a["tool"] == b["tool"] and (a["item"].lower() in b["item"].lower() or b["item"].lower() in a["item"].lower())
+        checks = [c for c in checks if not any(same(c, r) for r in rule_checks)] + rule_checks
 
-    flags = verdict.warning_signs(text + "\n" + extra.get("text_in_images", ""))
+    # Follow-up step: every firm or person searched in SEBI's registers (by the AI or the rules) is also
+    # searched in SEBI's enforcement orders, whether the registers knew it or not.
+    done = {c["item"].lower() for c in checks if c["tool"] == "SEBI enforcement orders"}
+    for c in list(checks):
+        if c["tool"] == "SEBI registers" and c["item"].lower() not in done and not ids.find_ids(c["item"]):
+            done.add(c["item"].lower())
+            on_step(f"Following up: searching SEBI's enforcement orders for “{c['item']}”")
+            checks.append({"item": c["item"], "tool": "SEBI enforcement orders",
+                           "result": _run("SEBI enforcement orders", c["item"])})
+
+    flags = verdict.warning_signs(text)
     seen = {f["code"] for f in flags}
+    for c in checks:  # warning signs found by a check, e.g. a website registered last week
+        flag = c["result"].get("flag")
+        if flag and flag["code"] not in seen:
+            seen.add(flag["code"])
+            flags.append(flag)
     for c in extra.get("claims", []):  # warning signs the AI spotted that our patterns missed
         if c.get("type") not in seen:
             seen.add(c.get("type"))
@@ -201,7 +302,7 @@ if __name__ == "__main__":
     brain.PROVIDERS = []
     rep = run_check("Get a degree from Commercial University Ltd in 30 days! Pay registration fee of Rs 5000 "
                     "to ravi.k@okaxis within 24 hours. Details: bit.ly/fastdegree", on_step=lambda s: None)
-    verdicts = {c["item"]: c["verdict"] for c in rep["checks"]}
+    verdicts = rep["items"]  # one verdict per item: the most telling of its checks
     assert verdicts.get("Commercial University Ltd") == "ON_WARNING_LIST", verdicts
     assert verdicts.get("bit.ly/fastdegree") == "INVALID", verdicts
     assert rep["headline"] == "HIGH_RISK", rep["headline"]

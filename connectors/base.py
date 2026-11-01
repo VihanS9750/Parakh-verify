@@ -4,8 +4,9 @@ from datetime import datetime, timezone, timedelta
 
 import requests
 
+from connectors.net import HEADERS  # one honest user agent for every connector (team rule 6: never look like a browser)
+
 IST = timezone(timedelta(hours=5, minutes=30))
-HEADERS = {"User-Agent": "Mozilla/5.0 (Parakh hackathon project)"}
 
 
 def now_ist() -> str:
