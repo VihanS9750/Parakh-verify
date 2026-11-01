@@ -2,7 +2,7 @@
 
 **Don't trust the forward. Verify the evidence.**
 
-Parakh takes a forwarded message, screenshot or PDF, pulls out everything that can be checked (firm names, registration numbers, links, UPI IDs and payment QR codes, university and bank names), and checks each one against **live official Indian records**. For every item it shows what it found, in which source, at what time, and what to do next, in English or Hindi.
+Parakh takes a forwarded message, screenshot or PDF, pulls out everything that can be checked (firm names, registration numbers, links, UPI IDs and payment QR codes, university and bank names), and checks each one against **official Indian records** (searched live where the source allows it, from dated downloads where it doesn't). For every item it shows what it found, in which source, at what time, and what to do next, in English or Hindi.
 
 Built at the Forge AI buildathon (NxtWave), 31 Oct to 1 Nov 2026, for **Theme 1, problem T1.4: fact-verification**. Team: Vihan, Rahul and Atharva.
 
@@ -25,7 +25,7 @@ Indians reported losing ₹22,495 crore to cyber fraud in 2025, about three quar
 | Payment QR codes | The QR is decoded offline; Parakh says where the money goes and how much, and compares it with the message. It never says the recipient is verified |
 | Links | Short-link destination, website age (RDAP registry), fake government-looking domains, look-alike letters, `.apk` files, the abuse.ch URLhaus list for links inside QR codes |
 | ID numbers | Format and check digits for GSTIN, PAN, CIN, eCourts CNR, Income Tax and CBIC DIN, SEBI numbers, AMFI ARN, UPI IDs, with the official page to confirm |
-| The wording | 15+ warning-sign patterns from SEBI, RBI, I4C and PIB advisories (guaranteed returns, KYC-block threats, OTP requests, fees up front...) |
+| The wording | 15 warning-sign patterns from SEBI, RBI, I4C and PIB advisories (guaranteed returns, KYC-block threats, OTP requests, fees up front...) |
 
 ## How it works
 
@@ -45,7 +45,7 @@ flowchart TD
 ```
 
 - **The AI investigates and explains; fixed rules decide.** The AI chooses which checks to run and retries when a search fails, but it never decides a verdict. Every verdict can be traced to a line in [verdict.py](verdict.py). An AI-spotted warning sign must quote words that are really in the message, and it can never be the sign that tips a message into High risk.
-- **The rules always run too.** If the AI skips or shortens something, the rules' own checks still cover it. With no API key, or if both AI providers fail, Parakh runs rules-only on the laptop.
+- **The rules always run too.** If the AI skips or shortens something, the rules' own checks still cover it. With no API key, or if Gemini fails or runs out of free requests, Parakh runs rules-only on the laptop.
 - **Overall result:** *High risk*, *Be careful*, or *No adverse finding in the checks performed*. The last one never means "genuine": a register match shows a firm exists, not who sent the message. An evidence label (Strong, Medium, Limited) says how much stands behind the result. It is a label, not a probability.
 - **Wording:** Parakh never calls a named firm a fraud. It says what the official record shows and when it was checked.
 
@@ -121,6 +121,8 @@ Self-checks (the connector ones run live lookups):
 .venv\Scripts\python -m connectors.banks
 .venv\Scripts\python -m connectors.upi_qr
 .venv\Scripts\python -m connectors.lists
+.venv\Scripts\python -m connectors.links
+.venv\Scripts\python -m connectors.rbi
 .venv\Scripts\python -m connectors.sebi_orders
 .venv\Scripts\python agent.py
 .venv\Scripts\python test_injection.py
@@ -140,6 +142,8 @@ Self-checks (the connector ones run live lookups):
 | `data/` | The RBI lists as downloaded from rbi.org.in on 1 Nov 2026 (original files and the CSVs built from them) |
 | `store.py` | SQLite: dated copies of lists and the check log |
 | `test_forwards/`, `eval.py` | The 31 test messages and the runner |
+| `test_injection.py` | Hidden orders to the AI inside a forward must not change the verdict |
+| `requirements.txt`, `packages.txt`, `.env.example` | Python packages, system packages for hosting (Tesseract), and the key template |
 | `docs/` | [Build log](docs/build-log.md), [market analysis](docs/market-analysis.md), [research](docs/research/), evaluation results |
 | `CLAUDE.md` | The team brief: rules, architecture, connector contract |
 

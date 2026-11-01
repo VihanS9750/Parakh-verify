@@ -6,7 +6,7 @@ kept). No rule had been written from them, so they were the first honest test.
 | | Scams rated High risk | Scams cleared as fine | Genuine messages rated High risk |
 |---|---|---|---|
 | The 20 older scams (the rules were written from advisories like these) | 16 of 20 rules-only | 0 | 0 of 3 |
-| The 4 fresh scams, **before** any rule change | **1 of 4** (rules-only); AI run: 20 of 24 overall | 0 | 0 of 4 |
+| The 4 fresh scams, **before** any rule change | **1 of 4** (rules-only) | 0 | 0 of 4 |
 | The 4 fresh scams, after widening four wording rules | 4 of 4 | 0 | 0 of 4 |
 
 Reading it honestly:

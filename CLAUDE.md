@@ -4,13 +4,13 @@ Read this before writing any code. Three beginners (Vihan, Rahul, Atharva) are b
 
 ## What we are building
 
-Someone forwards a scary notice, a stock tip, an adviser's details or a loan app. Parakh reads it, checks it against **live official Indian records**, and replies with:
+Someone forwards a scary notice, a stock tip, an adviser's details or a loan app. Parakh reads it, checks it against **official Indian records** (searched live where the source allows it, from dated downloads where it doesn't), and replies with:
 
 1. a verdict for each item in the message, and one overall verdict,
 2. the official source checked for each item, with the time of the check,
 3. what to do next (for example, call 1930 or report on cybercrime.gov.in), in English or Hindi.
 
-Input: pasted text, a screenshot (including payment QR codes) or a PDF. There is no voice-note input: audio can't be masked, and the only free speech-to-text we found is not part of our stack.
+Input: pasted text, a screenshot (including payment QR codes) or a PDF. There is no voice-note input, because audio can't be masked before it leaves the laptop.
 
 Pitch line: **"Don't trust the forward. Verify the evidence."** The product is the verification engine, not a chatbot.
 
@@ -100,12 +100,12 @@ Careful with what a match means: a registered NBFC doesn't make an app claiming 
 ## Layout
 
 ```
-app.py              Streamlit page                         Vihan / Atharva
+app.py              Streamlit page: check, editable OCR text, log, sources   Rahul
 agent.py            pipeline: text, masking, rules checks, follow-ups, report   Vihan
 brain.py            the AI: Gemini tool loop and explanation   Vihan
 verdict.py          verdict rules, warning signs, next steps     Vihan
 store.py            SQLite: list snapshots + check log           Atharva
-eval.py             runs test_forwards/forwards.json             Rahul (scaffolded)
+eval.py             runs test_forwards/forwards.json             Rahul
 connectors/
   net.py            polite GET + result() shape                  Atharva
   lists.py          UGC fake list, IRDAI, AMFI (live)            Atharva
