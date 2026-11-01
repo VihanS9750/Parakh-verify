@@ -5,3 +5,4 @@ pdfplumber
 rapidfuzz
 openai
 pytesseract
+opencv-python-headless

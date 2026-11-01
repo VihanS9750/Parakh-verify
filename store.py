@@ -5,6 +5,9 @@ Owner: Atharva.
 - checks:    one row per check. We keep a hash of the forward, never the forward itself.
 """
 import hashlib
+import hmac
+import os
+import secrets
 import json
 import sqlite3
 import time
@@ -22,6 +25,8 @@ def _db():
     con.execute("""CREATE TABLE IF NOT EXISTS checks (
         id INTEGER PRIMARY KEY, created_at TEXT, input_hash TEXT, headline TEXT,
         n_items INTEGER, verdicts TEXT, duration_ms INTEGER, mode TEXT)""")
+    con.execute("""CREATE TABLE IF NOT EXISTS handle_sightings (
+        handle_hash TEXT, input_hash TEXT, claim TEXT, seen_at TEXT, PRIMARY KEY (handle_hash, input_hash))""")
     return con
 
 
@@ -61,8 +66,20 @@ def clear_snapshots():
     con.commit()
 
 
+KEY_FILE = Path(__file__).with_name(".parakh_log_key")  # made on first use, kept on this computer, never committed
+
+
+def fingerprint(text):
+    """A keyed hash (HMAC) of a forward. Plain SHA-256 can be guessed for a known message; without the key it can't."""
+    key = os.environ.get("PARAKH_LOG_KEY") or (KEY_FILE.read_text() if KEY_FILE.exists() else "")
+    if not key:
+        key = secrets.token_hex(16)
+        KEY_FILE.write_text(key)
+    return hmac.new(key.encode(), text.encode(), hashlib.sha256).hexdigest()[:16]
+
+
 def log_check(forward_text, headline, verdicts, duration_ms, mode):
-    digest = hashlib.sha256(forward_text.encode()).hexdigest()[:16]
+    digest = fingerprint(forward_text)
     con = _db()
     con.execute("INSERT INTO checks (created_at, input_hash, headline, n_items, verdicts, duration_ms, mode) "
                 "VALUES (?,?,?,?,?,?,?)",
@@ -73,3 +90,16 @@ def log_check(forward_text, headline, verdicts, duration_ms, mode):
 def recent_checks(limit=50):
     return _db().execute("SELECT created_at, headline, n_items, verdicts, duration_ms, mode, input_hash "
                          "FROM checks ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+
+
+def remember_handle(handle, claim, forward_text):
+    """Note that a UPI handle was in this forward, told as story `claim`. Returns every claim that handle has been
+    seen with in OTHER forwards. Only hashes are kept (of the handle and of the forward), never the handle itself."""
+    h = hashlib.sha256(handle.lower().encode()).hexdigest()[:16]
+    digest = hashlib.sha256(forward_text.encode()).hexdigest()[:16]
+    con = _db()
+    before = {r[0] for r in con.execute("SELECT claim FROM handle_sightings WHERE handle_hash=? AND input_hash!=?",
+                                        (h, digest))}
+    con.execute("INSERT OR IGNORE INTO handle_sightings VALUES (?,?,?,?)", (h, digest, claim, now()))
+    con.commit()
+    return before

@@ -103,13 +103,15 @@ RED_FLAGS = [
      r"premium (?:service|group|membership)|t\.me/|telegram channel",
      "Invites you into a paid tip group or channel. SEBI warns these are usually run by unregistered people."),
     ("unexpected_money",
-     r"refund of rs|tax refund|amount eligible|financial assistance (?:of|ranging)|free laptops?|you have won|lottery|"
-     r"cash ?back of|to every citizen|monetary reward",
+     r"refund of rs|tax refund|amount eligible|financial assistance (?:of|ranging|between|up to)|free laptops?|"
+     r"you have won|lottery|cash ?back of|to every citizen|monetary reward|"
+     r"reward\s*points?.{0,80}(?:expir|redeem|cash|claim)|(?:expir|redeem).{0,60}reward\s*points?",
      "Offers money, a refund or a free benefit out of the blue. Refunds and government schemes don't arrive by forwarded message."),
     ("official_via_link",
      r"(?=.*(?:income tax|assessment order|\bGST\b|customs|SEBI|RBI|TRAI|police|court|enforcement|e-?challan|"
      r"\bRTO\b|government|ministry))(?=.*(?:click|link|https?://|www\.|\.apk|download|"
-     r"\.(?:com|net|org|xyz|icu|top|site|online|info|link)\b))",
+     r"\.(?:com|net|org|xyz|icu|top|site|online|info|link)\b))|"
+     r"(?=.*(?:yojana|pradhan mantri))(?=.*(?:click|link|https?://|www\.|apply (?:online|now)))",
      "Claims to come from a government body but asks you to act through a link or app. Check notices on the official portal yourself."),
     ("bank_details_link",
      r"(?:update|verify|confirm|enter|submit)\s+(?:your\s+)?(?:bank|account|card|kyc|netbanking)\s*(?:account\s*)?"
@@ -120,7 +122,8 @@ RED_FLAGS = [
      "Offers easy money for simple online tasks. Real employers never charge you to start work."),
     ("urgency",
      r"within\s+\d+\s*(?:hours?|hrs|minutes?|mins)|immediately|urgent|today only|for today|last chance|"
-     r"limited (?:slots|seats)|act now|(?:block(?:ed)?|suspended|expire[sd]?)\s+(?:today|tonight)",
+     r"limited (?:slots|seats)|act now|(?:block(?:ed)?|suspended|expire[sd]?)\s+(?:today|tonight)|"
+     r"(?:today|tonight)\s+expir\w*|expir\w*\s+(?:today|tonight)",
      "Pushes you to act fast. Pressure to decide quickly is a classic scam sign."),
     ("threat",
      r"arrest|warrant|money laundering|narcotics|drugs? (?:parcel|package)|legal action|jail|freeze order|"
@@ -132,7 +135,8 @@ RED_FLAGS = [
      "Asks you to pay or move money first: to unlock a loan, job or refund, or to 'verify' funds."),
     ("kyc_block",
      r"\bKYC\b.{0,60}(?:block|suspend|expire|update)|(?:block|suspend)\w*.{0,80}\bKYC\b|"
-     r"account\b.{0,30}(?:will be|has been) (?:block|suspend|frozen|deactivat)",
+     r"account\b.{0,30}(?:will be|has been) (?:block|suspend|frozen|deactivat)|"
+     r"\bre-?KYC\b.{0,80}(?:pending|due|expir|block)|(?:avoid|prevent)\b.{0,30}(?:a/?c|account)\s*(?:block|clos|suspen|freez|deactivat)",
      "Says your account or SIM will be blocked unless you act. Banks and telecom companies don't do this over SMS or WhatsApp."),
     ("secrecy",
      r"don'?t tell|do not (?:tell|inform|share this)|keep (?:this|it) (?:secret|confidential)|"
@@ -156,8 +160,27 @@ def warning_signs(text):
 HEADLINES = {
     "HIGH_RISK": ("High risk: don't pay or share anything", "ज़्यादा जोखिम: पैसे न भेजें, कोई जानकारी न दें", "red"),
     "CAUTION": ("Be careful: some things couldn't be confirmed", "सावधान: कुछ बातें पुष्ट नहीं हो सकीं", "orange"),
-    "CONSISTENT": ("Consistent with official records", "आधिकारिक रिकॉर्ड से मेल खाता है", "green"),
+    "CONSISTENT": ("No adverse finding in the checks performed", "की गई जाँचों में कोई प्रतिकूल निष्कर्ष नहीं मिला", "green"),
 }
+
+def evidence_strength(item_keys, flags):
+    """How much evidence stands behind the overall verdict. A label for people, not a probability.
+    Strong: official findings that agree with each other or with the wording. Medium: one official finding,
+    several warning signs in the wording, or registers that match. Limited: little or nothing to go on."""
+    keys = list(item_keys)
+    official = sum(k in ("ON_WARNING_LIST", "INVALID", "IN_SEBI_ORDER") for k in keys)
+    unreached = sum(k == "COULDNT_VERIFY" for k in keys)
+    if official >= 2 or (official >= 1 and flags):
+        level = "Strong"
+    elif official == 1 or len(flags) >= 2 or "MATCHED" in keys:
+        level = "Medium"
+    else:
+        level = "Limited"
+    parts = [f"{official} official finding(s)", f"{len(flags)} warning sign(s) in the wording"]
+    if unreached:
+        parts.append(f"{unreached} source(s) couldn't be reached")
+    return {"level": level, "summary": ", ".join(parts)}
+
 
 NEXT_STEPS = {
     "HIGH_RISK": {
@@ -228,6 +251,11 @@ if __name__ == "__main__":
     assert not warning_signs("Hello, I am Sunil A Kamdar, an AMFI-registered mutual fund distributor, ARN-108.")
     assert not warning_signs("Edward edited the fir tree report")  # 'ED'/'FIR' only as capitalised words
     assert headline(["MATCHED"], []) == "CONSISTENT"
+    assert evidence_strength(["ON_WARNING_LIST", "INVALID"], [])["level"] == "Strong"
+    assert evidence_strength(["INVALID"], [{"code": "urgency"}])["level"] == "Strong"
+    assert evidence_strength(["INVALID"], [])["level"] == "Medium" and evidence_strength(["MATCHED"], [])["level"] == "Medium"
+    assert evidence_strength(["NOT_FOUND"], [])["level"] == "Limited" and evidence_strength([], [])["level"] == "Limited"
+    assert "couldn't be reached" in evidence_strength(["COULDNT_VERIFY"], [])["summary"]
     assert headline(["MATCHED"], flags) == "HIGH_RISK"
     assert headline(["COULDNT_VERIFY"], []) == "CAUTION"
     assert item_verdict(["CONFIRM_OFFICIALLY", "MATCHED"]) == "MATCHED"

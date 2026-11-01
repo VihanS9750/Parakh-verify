@@ -91,7 +91,7 @@ Every connector returns this dict (build it with `net.result(...)`):
 | Format OK: confirm on the official page | valid format, gated source (eCourts, income tax, CBIC, GST) |
 | Couldn't verify right now | source down |
 
-Each item takes its most telling verdict (`verdict.RANK`). Overall: **High risk** if any red verdict, or a doubtful item plus a warning sign, or 2+ warning signs of which at least one comes from the rules; **Consistent** only if every item matched and there are no warning signs; otherwise **Be careful**. Warning signs come from fixed patterns based on SEBI/RBI/I4C/PIB advisories (`verdict.RED_FLAGS`).
+Each item takes its most telling verdict (`verdict.RANK`). Overall: **High risk** if any red verdict, or a doubtful item plus a warning sign, or 2+ warning signs of which at least one comes from the rules; **No adverse finding** (label `CONSISTENT`) only if every item matched and there are no warning signs; otherwise **Be careful**. Warning signs come from fixed patterns based on SEBI/RBI/I4C/PIB advisories (`verdict.RED_FLAGS`).
 
 Careful with what a match means: a registered NBFC doesn't make an app claiming to work with it legitimate (check RBI's lending-app list); a court case doesn't mean fraud; a valid ID format doesn't prove the ID was issued.
 

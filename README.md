@@ -21,7 +21,7 @@ forward (pasted text, screenshot or PDF)
   -> app.py shows every item with its source, record, time and a link to the official page
 ```
 
-**The AI investigates and explains; fixed rules decide.** In AI mode the masked text of the forward is sent to Google (Gemini) or, if that fails, Groq (Qwen), both on free tiers. Aadhaar, PAN and mobile numbers keep only their last 4 characters first (`ids.mask`); other details in the text, such as names, UPI IDs and links, are sent as written. Images are never sent. With no API key the app runs rules-only, entirely on the laptop. Every verdict can be traced to a line in `verdict.py`; an AI-spotted warning sign must quote words that are really in the message and can't make a message High risk alone. Aadhaar and PAN are never looked up. The check log stores a fingerprint (hash) of each forward, never the forward itself.
+**The AI investigates and explains; fixed rules decide.** In AI mode the masked text of the forward is sent to Google (Gemini) or, if that fails, Groq (Qwen), both on free tiers. Aadhaar, PAN, mobile numbers, bank account numbers, IFSC codes and email addresses are masked first (`ids.mask`, last 4 characters kept); other details in the text, such as names, UPI IDs and links, are sent as written. The check log stores a keyed (HMAC) fingerprint of each forward, never the forward. Images are never sent. With no API key the app runs rules-only, entirely on the laptop. Every verdict can be traced to a line in `verdict.py`; an AI-spotted warning sign must quote words that are really in the message and can't make a message High risk alone. Aadhaar and PAN are never looked up. The check log stores a fingerprint (hash) of each forward, never the forward itself.
 
 ## Official sources
 
@@ -41,7 +41,7 @@ Our user agent says who we are, and we make at most one request per second per s
 
 ## Verdicts
 
-Each item gets one of eleven verdicts, such as *Matches the official record*, *On an official warning list*, *Not found in the checked register* or *Couldn't verify right now*. The message as a whole is rated **High risk**, **Be careful** or **Consistent with official records**.
+Each item gets one of eleven verdicts, such as *Matches the official record*, *On an official warning list*, *Not found in the checked register* or *Couldn't verify right now*. The message as a whole is rated **High risk**, **Be careful** or **No adverse finding in the checks performed** (a match never proves who sent the message), plus an evidence label (Strong, Medium or Limited) that says how much stands behind the result.
 
 Parakh never calls a named firm a fraud. It says what the official record shows and when it was checked. The full rules are in [CLAUDE.md](CLAUDE.md#verdicts-verdictpy-plain-rules) and [verdict.py](verdict.py).
 
@@ -66,6 +66,8 @@ copy .env.example .env          (add a free Gemini key from aistudio.google.com;
 winget install UB-Mannheim.TesseractOCR
 .venv\Scripts\streamlit run app.py
 ```
+
+**UPI QR codes:** a QR in a screenshot is decoded offline (OpenCV, `connectors/upi_qr.py`) and compared with the message: it says what the QR will do (it sends money, how much, to which handle) and never claims the recipient is verified. A QR holding a link is checked against abuse.ch's URLhaus list (free `URLHAUS_AUTH_KEY` in `.env`). Handle memory in `parakh.db` keeps only hashes.
 
 Screenshots are read offline by Tesseract. For Hindi, put `eng.traineddata` and `hin.traineddata` from github.com/tesseract-ocr/tessdata_fast in a `tessdata\` folder here (not committed). Without a key the app runs in rules-only mode. Without Tesseract, screenshots can't be read: images are never sent to the AI, because an image can't be masked. Before any text goes to the AI, Aadhaar, PAN and phone numbers are masked to their last 4 characters.
 
