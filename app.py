@@ -6,6 +6,7 @@ import pandas as pd
 import streamlit as st
 
 import agent
+import brain
 import store
 import verdict
 from connectors import lists
@@ -15,8 +16,11 @@ LANGS = {"English": "en", "हिन्दी (Hindi)": "hi"}
 
 with st.sidebar:
     lang = LANGS[st.radio("Reply language", list(LANGS))]
-    st.caption("Runs on this computer with no external AI service. Connected checks: " + ", ".join(agent.TOOLS))
-    st.caption("Aadhaar and PAN numbers are never looked up or sent anywhere. "
+    ai = brain.available()
+    st.caption(("AI investigator: " + " → ".join(ai) + " → rules if both fail") if ai
+               else "AI off (no key in .env): plain rules pick the checks.")
+    st.caption("Verdicts always come from fixed rules, never from the AI. Connected checks: " + ", ".join(agent.TOOLS))
+    st.caption("Aadhaar and PAN numbers are masked before any text goes to the AI, and never looked up. "
                "We store a fingerprint of each forward, never the forward itself.")
 
 st.title("Parakh")
@@ -31,12 +35,14 @@ def label(key, table):
 def show(report):
     text, colour = label(report["headline"], verdict.HEADLINES)
     st.markdown(f"## :{colour}[{text}]")
+    if report.get("summary"):
+        st.caption(f"What the message asks: {report['summary']}")
     st.write(report["explanation"])
 
     if report["flags"]:
         st.subheader("Warning signs in the wording")
         for f in report["flags"]:
-            st.markdown(f"- {f['reason']}")
+            st.markdown(f"- {f['reason']}" + (" *(spotted by AI)*" if f["by"] == "AI" else ""))
 
     st.subheader("Evidence, item by item")
     by_item = {}
@@ -66,7 +72,7 @@ def show(report):
                     st.caption(f"Limits of this check: {r['limitations']}")
 
     st.subheader("What to do now")
-    steps = verdict.NEXT_STEPS[report["headline"]][lang]
+    steps = report["next_steps"]
     st.markdown("\n".join(f"{i}. {s}" for i, s in enumerate(steps, 1)))
 
 
@@ -76,7 +82,8 @@ with check_tab:
     text = st.text_area("Paste the message", height=170,
                         placeholder="e.g. Invest ₹50,000 with ABC Investments. Our SEBI-registered adviser "
                                     "guarantees 4% monthly returns…")
-    files = st.file_uploader("…or add a PDF (notice, letter, order)", type=["pdf"], accept_multiple_files=True)
+    files = st.file_uploader("…or add a screenshot or PDF", type=["png", "jpg", "jpeg", "webp", "pdf"],
+                             accept_multiple_files=True)
     if st.button("Check it", type="primary"):
         if not text.strip() and not files:
             st.warning("Paste a message or add a file first.")
