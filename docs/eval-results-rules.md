@@ -7,8 +7,8 @@ so expect lower numbers on messages the team has never seen. Add fresh forwards 
 
 | Measure | Result |
 |---|---|
-| Scams rated **High risk** | 17 of 24 (95% range 51% to 85%) |
-| Scams rated **Be careful** (not confirmed, not condemned) | 7 of 24 |
+| Scams rated **High risk** | 20 of 24 (95% range 64% to 93%) |
+| Scams rated **Be careful** (not confirmed, not condemned) | 4 of 24 |
 | Scams wrongly rated **Consistent** (the dangerous error) | 0 of 24 |
 | Genuine messages wrongly rated **High risk** | 0 of 7 (95% range 0% to 35%) |
 | Genuine messages rated **Consistent** | 2 of 7 |
@@ -39,10 +39,10 @@ so expect lower numbers on messages the team has never seen. Add fresh forwards 
 | GEN-3 | no | CAUTION | U65100KA2016PTC092879: CONFIRM_OFFICIALLY; INZ000301838: MATCHED; ARN-111686: MATCHED; Groww Invest Tech Pvt Ltd: MATCHED | - |
 | GEN-AMFI | no | CONSISTENT | ARN-108: MATCHED | - |
 | GEN-LIC | no | CONSISTENT | Life Insurance Corporation of India: MATCHED | - |
-| FRESH-1 | yes | CAUTION | - | urgency |
+| FRESH-1 | yes | HIGH_RISK | - | urgency, kyc_block |
 | FRESH-2 | yes | HIGH_RISK | - | urgency, kyc_block |
-| FRESH-3 | yes | CAUTION | - | - |
-| FRESH-4 | yes | CAUTION | - | - |
+| FRESH-3 | yes | HIGH_RISK | - | unexpected_money, urgency |
+| FRESH-4 | yes | HIGH_RISK | - | unexpected_money, official_via_link |
 | FRESH-5 | no | CAUTION | - | - |
 | FRESH-6 | no | CAUTION | - | - |
 | FRESH-7 | no | CAUTION | - | - |

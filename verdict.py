@@ -103,13 +103,15 @@ RED_FLAGS = [
      r"premium (?:service|group|membership)|t\.me/|telegram channel",
      "Invites you into a paid tip group or channel. SEBI warns these are usually run by unregistered people."),
     ("unexpected_money",
-     r"refund of rs|tax refund|amount eligible|financial assistance (?:of|ranging)|free laptops?|you have won|lottery|"
-     r"cash ?back of|to every citizen|monetary reward",
+     r"refund of rs|tax refund|amount eligible|financial assistance (?:of|ranging|between|up to)|free laptops?|"
+     r"you have won|lottery|cash ?back of|to every citizen|monetary reward|"
+     r"reward\s*points?.{0,80}(?:expir|redeem|cash|claim)|(?:expir|redeem).{0,60}reward\s*points?",
      "Offers money, a refund or a free benefit out of the blue. Refunds and government schemes don't arrive by forwarded message."),
     ("official_via_link",
      r"(?=.*(?:income tax|assessment order|\bGST\b|customs|SEBI|RBI|TRAI|police|court|enforcement|e-?challan|"
      r"\bRTO\b|government|ministry))(?=.*(?:click|link|https?://|www\.|\.apk|download|"
-     r"\.(?:com|net|org|xyz|icu|top|site|online|info|link)\b))",
+     r"\.(?:com|net|org|xyz|icu|top|site|online|info|link)\b))|"
+     r"(?=.*(?:yojana|pradhan mantri))(?=.*(?:click|link|https?://|www\.|apply (?:online|now)))",
      "Claims to come from a government body but asks you to act through a link or app. Check notices on the official portal yourself."),
     ("bank_details_link",
      r"(?:update|verify|confirm|enter|submit)\s+(?:your\s+)?(?:bank|account|card|kyc|netbanking)\s*(?:account\s*)?"
@@ -120,7 +122,8 @@ RED_FLAGS = [
      "Offers easy money for simple online tasks. Real employers never charge you to start work."),
     ("urgency",
      r"within\s+\d+\s*(?:hours?|hrs|minutes?|mins)|immediately|urgent|today only|for today|last chance|"
-     r"limited (?:slots|seats)|act now|(?:block(?:ed)?|suspended|expire[sd]?)\s+(?:today|tonight)",
+     r"limited (?:slots|seats)|act now|(?:block(?:ed)?|suspended|expire[sd]?)\s+(?:today|tonight)|"
+     r"(?:today|tonight)\s+expir\w*|expir\w*\s+(?:today|tonight)",
      "Pushes you to act fast. Pressure to decide quickly is a classic scam sign."),
     ("threat",
      r"arrest|warrant|money laundering|narcotics|drugs? (?:parcel|package)|legal action|jail|freeze order|"
@@ -132,7 +135,8 @@ RED_FLAGS = [
      "Asks you to pay or move money first: to unlock a loan, job or refund, or to 'verify' funds."),
     ("kyc_block",
      r"\bKYC\b.{0,60}(?:block|suspend|expire|update)|(?:block|suspend)\w*.{0,80}\bKYC\b|"
-     r"account\b.{0,30}(?:will be|has been) (?:block|suspend|frozen|deactivat)",
+     r"account\b.{0,30}(?:will be|has been) (?:block|suspend|frozen|deactivat)|"
+     r"\bre-?KYC\b.{0,80}(?:pending|due|expir|block)|(?:avoid|prevent)\b.{0,30}(?:a/?c|account)\s*(?:block|clos|suspen|freez|deactivat)",
      "Says your account or SIM will be blocked unless you act. Banks and telecom companies don't do this over SMS or WhatsApp."),
     ("secrecy",
      r"don'?t tell|do not (?:tell|inform|share this)|keep (?:this|it) (?:secret|confidential)|"
