@@ -17,6 +17,8 @@ def pdf_to_csv(pdf_path, csv_path, name_col=1, id_col=None):
             for table in page.extract_tables():
                 for row in table:
                     cells = [(c or "").strip() for c in row]
+                    if not cells[0].isdigit():  # skip header rows like "Sr. No | Name | ..."
+                        continue
                     if len(cells) > name_col and cells[name_col]:
                         rows.append({"name": cells[name_col],
                                      "id": cells[id_col] if id_col is not None and len(cells) > id_col else ""})
@@ -32,12 +34,13 @@ def load_csv(path):
         return [{"name": r["name"], "id": r.get("id", "")} for r in csv.DictReader(f)]
 
 
-def search_list(source, query, csv_path, source_url, downloaded_on=None):
-    """downloaded_on: 'YYYY-MM-DD' you saved the file; defaults to the file's date."""
+def search_list(source, query, csv_path, source_url, downloaded_on=None, common=None):
+    """downloaded_on: 'YYYY-MM-DD' you saved the file; defaults to the file's date.
+    common: words too frequent in this list to count for 'did you mean' (see best_matches)."""
     if downloaded_on is None:
         downloaded_on = datetime.fromtimestamp(os.path.getmtime(csv_path)).strftime("%Y-%m-%d")
     records = load_csv(csv_path)
-    matches = find_by_id(query, records) or best_matches(query, records)
+    matches = find_by_id(query, records) or best_matches(query, records, common=common)
     return result(source, query, "found" if matches else "not_found", matches,
                   source_url=source_url, data_as_of=downloaded_on,
                   note=f"From the list downloaded on {downloaded_on}")
