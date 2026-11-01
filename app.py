@@ -270,6 +270,12 @@ with sources_tab:
         ("IRDAI insurers and brokers", "IRDAI", "Live pages, cached 24 h", "https://irdai.gov.in/list-of-life-insurers1"),
         ("AMFI mutual fund distributors", "AMFI", "Live search every time", lists.AMFI_PAGE),
         ("ID and link format checks", "Parakh rules", "Offline, never fails", ""),
+        ("Bank websites (25 banks' official domains)", "RBI .bank.in mandate", "Domain list read from each bank's "
+         "own site on 1 Nov 2026", "https://website.rbi.org.in/web/rbi/-/notifications/circular-migration-to-.bank.in-domain"),
+        ("UPI payment QR codes", "Parakh rules", "Decoded offline (OpenCV); compared with the message. Recipient is never "
+         "verified: a QR's name is typed by its maker", "https://siportal.sebi.gov.in/intermediary/sebi-check"),
+        ("URLhaus malware URL list (links inside QR codes)", "abuse.ch",
+         "Last-30-days export, cached 1 h; needs a free key (URLHAUS_AUTH_KEY)", "https://urlhaus.abuse.ch/"),
     ]
     st.dataframe(pd.DataFrame(sources, columns=[T("col_source"), T("col_org"), T("col_how"), T("col_page")]),
                  hide_index=True, width="stretch",

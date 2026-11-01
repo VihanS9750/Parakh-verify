@@ -24,7 +24,7 @@ from PIL import Image
 import brain
 import store
 import verdict
-from connectors import banks, ids, links, lists, net, sebi_orders
+from connectors import banks, ids, links, lists, net, sebi_orders, upi_qr, urlhaus
 
 try:  # Rahul's connectors
     from connectors import sebi
@@ -217,6 +217,7 @@ def _facts(report):
 def run_check(text, files=(), language="en", on_step=print):
     """The whole pipeline. files = [(filename, bytes, mime type)]: PDFs, screenshots and voice notes."""
     start = time.time()
+    qr_codes = []  # text of every QR code found in a screenshot (decoded offline, never sent anywhere)
     for name, data, mime in files:
         if mime == "application/pdf":
             with pdfplumber.open(io.BytesIO(data)) as pdf:
@@ -224,6 +225,12 @@ def run_check(text, files=(), language="en", on_step=print):
         elif mime.startswith("image/"):  # read here, never sent anywhere: an image can't be masked
             on_step(f"Reading the text in {name}")
             image_text = read_image(data)
+            qr = upi_qr.decode(data)
+            if qr:
+                on_step(f"Found a QR code in {name}")
+                qr_codes.append(qr)
+            else:
+                on_step(f"No readable QR code in {name} (if it has one, send a sharper picture)")
             if not image_text.strip():
                 on_step(f"Couldn't read any text in {name}" +
                         ("" if Path(TESSERACT).exists() else " (Tesseract isn't installed, see README)") +
@@ -266,6 +273,16 @@ def run_check(text, files=(), language="en", on_step=print):
             on_step(f"Following up: searching SEBI's enforcement orders for “{c['item']}”")
             checks.append({"item": c["item"], "tool": "SEBI enforcement orders",
                            "result": _run("SEBI enforcement orders", c["item"])})
+
+    for qr in qr_codes:  # a QR is compared with the words that came with it
+        if upi_qr.parse(qr):
+            item = f"UPI QR to {upi_qr.parse(qr)['handle']}"
+            on_step(f"Checking “{item}” against the message")
+            checks.append({"item": item, "tool": "UPI QR check", "result": upi_qr.check(qr, text)})
+        else:  # any other QR (a link, usually) goes through the link check
+            on_step(f"Checking the QR's link “{qr[:60]}”")
+            checks.append({"item": qr[:80], "tool": "ID and link check", "result": ids.check_link(qr)})
+            checks.append({"item": qr[:80], "tool": "URLhaus malware URL list", "result": urlhaus.check(qr)})
 
     flags = verdict.warning_signs(text)
     seen = {f["code"] for f in flags}
