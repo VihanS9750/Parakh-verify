@@ -58,7 +58,7 @@ PATTERNS = {
     "upi": (r"\b[\w.-]{2,64}@[A-Za-z]{2,64}\b(?!\.\w)", "UPI ID", "https://siportal.sebi.gov.in/intermediary/sebi-check"),
     "phone": (r"(?:\+91[\s-]?)?\b[6-9]\d{4}[\s-]?\d{5}\b", "Mobile number", "https://sancharsaathi.gov.in/sfc/"),
     "url": (r"\b(?:https?://|www\.)[^\s<>\"']+|(?<![@\w.-])[a-z0-9-]+(?:\.[a-z0-9-]+)*"
-            r"\.(?:apk|in|com|net|org|xyz|top|online|site|info|ly|gd|at|cc|io|app|link)(?:/[^\s<>\"']*)?",
+            r"\.(?:apk|in|com|net|org|xyz|top|online|site|info|ly|gd|at|cc|io|app|link|sbi|club|live|shop|store|vip|today|work|click|buzz|cyou|life|world|win|bid|icu|co|me|biz|tk|ml|ga|cf|gq)(?:/[^\s<>\"']*)?",
             "Link", ""),
 }
 

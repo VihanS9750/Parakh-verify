@@ -24,7 +24,7 @@ from PIL import Image
 import brain
 import store
 import verdict
-from connectors import ids, links, lists, net, sebi_orders
+from connectors import banks, ids, links, lists, net, sebi_orders
 
 try:  # Rahul's connectors
     from connectors import sebi
@@ -158,6 +158,9 @@ def investigate(text, on_step):
             add(value, "SEBI registers", value)
         if kind == "url" and rbi and re.search(r"forex|currency|trading|crypto|binary|dollar|\bfx\b", text, re.I):
             add(value, "RBI forex Alert List", value)
+    for c in banks.check_text(text):  # a bank is named: does each link go to that bank's own domain?
+        on_step(f"Checking “{c['item']}” against {c['result']['source']}")
+        checks.append(c)
     mentions_mf = re.search(r"mutual fund|\bAMFI\b|\bARN\b|distributor", text, re.I)
     # Only search SEBI when the message is about investing: a shop or a hospital is never in SEBI's registers,
     # and "not found" there would sound like an accusation.
