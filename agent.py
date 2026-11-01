@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pdfplumber
 import pytesseract
-from PIL import Image
+from PIL import Image, ImageDraw
 
 import brain
 import store
@@ -182,6 +182,36 @@ def read_image(data):
     return pytesseract.image_to_string(Image.open(io.BytesIO(data)), lang=langs)
 
 
+def mask_image(data):
+    """Black out Aadhaar and PAN numbers in a screenshot before it is sent to the AI.
+    Tesseract finds each word's position; a line containing an Aadhaar or PAN number gets those words covered.
+    Returns PNG bytes, or the original bytes if nothing needed hiding (or Tesseract isn't installed)."""
+    if not Path(TESSERACT).exists():
+        return data
+    pytesseract.pytesseract.tesseract_cmd = TESSERACT
+    img = Image.open(io.BytesIO(data)).convert("RGB")
+    d = pytesseract.image_to_data(img, lang="eng", output_type=pytesseract.Output.DICT)
+    lines = {}
+    for i, word in enumerate(d["text"]):
+        if word.strip():
+            lines.setdefault((d["block_num"][i], d["par_num"][i], d["line_num"][i]), []).append(i)
+    draw, hidden = ImageDraw.Draw(img), 0
+    for words in lines.values():
+        line = " ".join(d["text"][i] for i in words)
+        secret = "".join(v for k, v in ids.find_ids(line) if k in ("aadhaar", "pan")).replace(" ", "")
+        for i in words:
+            w = d["text"][i].strip(".,:;")
+            if secret and len(w) >= 4 and w in secret:
+                x, y, wd, ht = d["left"][i], d["top"][i], d["width"][i], d["height"][i]
+                draw.rectangle([x - 2, y - 2, x + wd + 2, y + ht + 2], fill="black")
+                hidden += 1
+    if not hidden:
+        return data
+    out = io.BytesIO()
+    img.save(out, "PNG")
+    return out.getvalue()
+
+
 def _facts(report):
     """What the AI may use to explain the result: verdicts and reasons, nothing else."""
     return {"overall": verdict.HEADLINES[report["headline"]][0],
@@ -200,9 +230,10 @@ def run_check(text, files=(), language="en", on_step=print):
             with pdfplumber.open(io.BytesIO(data)) as pdf:
                 text += "\n" + "\n".join(p.extract_text() or "" for p in pdf.pages)
         elif mime.startswith("image/"):
-            images.append((data, mime))
             on_step(f"Reading the text in {name}")
             text += "\n" + read_image(data)
+            masked = mask_image(data)  # only the masked copy can leave this computer
+            images.append((masked, mime if masked is data else "image/png"))
 
     ai = None
     if brain.available():
