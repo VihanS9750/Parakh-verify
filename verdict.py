@@ -156,8 +156,27 @@ def warning_signs(text):
 HEADLINES = {
     "HIGH_RISK": ("High risk: don't pay or share anything", "ज़्यादा जोखिम: पैसे न भेजें, कोई जानकारी न दें", "red"),
     "CAUTION": ("Be careful: some things couldn't be confirmed", "सावधान: कुछ बातें पुष्ट नहीं हो सकीं", "orange"),
-    "CONSISTENT": ("Consistent with official records", "आधिकारिक रिकॉर्ड से मेल खाता है", "green"),
+    "CONSISTENT": ("No adverse finding in the checks performed", "की गई जाँचों में कोई प्रतिकूल निष्कर्ष नहीं मिला", "green"),
 }
+
+def evidence_strength(item_keys, flags):
+    """How much evidence stands behind the overall verdict. A label for people, not a probability.
+    Strong: official findings that agree with each other or with the wording. Medium: one official finding,
+    several warning signs in the wording, or registers that match. Limited: little or nothing to go on."""
+    keys = list(item_keys)
+    official = sum(k in ("ON_WARNING_LIST", "INVALID", "IN_SEBI_ORDER") for k in keys)
+    unreached = sum(k == "COULDNT_VERIFY" for k in keys)
+    if official >= 2 or (official >= 1 and flags):
+        level = "Strong"
+    elif official == 1 or len(flags) >= 2 or "MATCHED" in keys:
+        level = "Medium"
+    else:
+        level = "Limited"
+    parts = [f"{official} official finding(s)", f"{len(flags)} warning sign(s) in the wording"]
+    if unreached:
+        parts.append(f"{unreached} source(s) couldn't be reached")
+    return {"level": level, "summary": ", ".join(parts)}
+
 
 NEXT_STEPS = {
     "HIGH_RISK": {
@@ -228,6 +247,11 @@ if __name__ == "__main__":
     assert not warning_signs("Hello, I am Sunil A Kamdar, an AMFI-registered mutual fund distributor, ARN-108.")
     assert not warning_signs("Edward edited the fir tree report")  # 'ED'/'FIR' only as capitalised words
     assert headline(["MATCHED"], []) == "CONSISTENT"
+    assert evidence_strength(["ON_WARNING_LIST", "INVALID"], [])["level"] == "Strong"
+    assert evidence_strength(["INVALID"], [{"code": "urgency"}])["level"] == "Strong"
+    assert evidence_strength(["INVALID"], [])["level"] == "Medium" and evidence_strength(["MATCHED"], [])["level"] == "Medium"
+    assert evidence_strength(["NOT_FOUND"], [])["level"] == "Limited" and evidence_strength([], [])["level"] == "Limited"
+    assert "couldn't be reached" in evidence_strength(["COULDNT_VERIFY"], [])["summary"]
     assert headline(["MATCHED"], flags) == "HIGH_RISK"
     assert headline(["COULDNT_VERIFY"], []) == "CAUTION"
     assert item_verdict(["CONFIRM_OFFICIALLY", "MATCHED"]) == "MATCHED"

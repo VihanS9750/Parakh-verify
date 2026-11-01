@@ -5,6 +5,9 @@ Owner: Atharva.
 - checks:    one row per check. We keep a hash of the forward, never the forward itself.
 """
 import hashlib
+import hmac
+import os
+import secrets
 import json
 import sqlite3
 import time
@@ -61,8 +64,20 @@ def clear_snapshots():
     con.commit()
 
 
+KEY_FILE = Path(__file__).with_name(".parakh_log_key")  # made on first use, kept on this computer, never committed
+
+
+def fingerprint(text):
+    """A keyed hash (HMAC) of a forward. Plain SHA-256 can be guessed for a known message; without the key it can't."""
+    key = os.environ.get("PARAKH_LOG_KEY") or (KEY_FILE.read_text() if KEY_FILE.exists() else "")
+    if not key:
+        key = secrets.token_hex(16)
+        KEY_FILE.write_text(key)
+    return hmac.new(key.encode(), text.encode(), hashlib.sha256).hexdigest()[:16]
+
+
 def log_check(forward_text, headline, verdicts, duration_ms, mode):
-    digest = hashlib.sha256(forward_text.encode()).hexdigest()[:16]
+    digest = fingerprint(forward_text)
     con = _db()
     con.execute("INSERT INTO checks (created_at, input_hash, headline, n_items, verdicts, duration_ms, mode) "
                 "VALUES (?,?,?,?,?,?,?)",

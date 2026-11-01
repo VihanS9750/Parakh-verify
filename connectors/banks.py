@@ -103,12 +103,34 @@ def banks_named(text, hosts=()):
             if re.search(rx, text, re.I) or any(imitates(h, brands) for h in hosts)]
 
 
+# Letters from other alphabets that look like Latin ones (Cyrillic, Greek): enough to catch the usual disguises.
+LOOKALIKES = str.maketrans({"а": "a", "е": "e", "о": "o", "р": "p", "с": "c", "х": "x", "у": "y", "і": "i",
+                            "ѕ": "s", "ј": "j", "һ": "h", "ԁ": "d", "ԛ": "q", "ο": "o", "ν": "v", "ɡ": "g"})
+
+
+def lookalike_checks(text):
+    """A link whose letters imitate a bank's official domain, e.g. sbі.co.in with a Cyrillic і."""
+    out = []
+    for token in re.findall(r"[\w.-]*[^\x00-\x7f][\w.-]*\.[\w-]{2,}", text):
+        skeleton = host_of(token.translate(LOOKALIKES))
+        for key, (name, domains, _, home, _, _) in BANKS.items():
+            if skeleton.isascii() and on_domain(skeleton, domains):
+                out.append({"item": token, "tool": TOOL, "result": net.result(
+                    f"{name} official domains", "RBI .bank.in mandate, bank websites", token, "invalid",
+                    source_url=home, list_type="format",
+                    detail=f"{token} is written with look-alike letters from another alphabet to imitate "
+                           f"{skeleton}, an official {name} domain. This shows the link doesn't match the bank; "
+                           "it is not a statement by the bank.",
+                    limitations="Catches common Cyrillic and Greek look-alikes only.")})
+    return out
+
+
 def check_text(text):
     """One check per (bank named, link in the message). Returns [{item, tool, result}] in the team contract."""
     urls = [(u, host_of(u)) for k, u in ids.find_ids(text) if k == "url"]
     urls = [(u, h) for u, h in urls if h and h not in ids.SHORTENERS]  # a short link's destination: links.inspect
     named = banks_named(text, [h for _, h in urls])
-    checks = []
+    checks = lookalike_checks(text)
     for url, host in urls:
         for key in named:
             name, domains, _, home, brands, legacy = BANKS[key]
@@ -162,4 +184,6 @@ if __name__ == "__main__":
     assert S("Union Bank: see unionbankofindia.co.in") == ["needs_user"]  # older address: neutral, not an accusation
     assert S("Yes Bank KYC at yesbank-verify.cc") == ["invalid"] and S("IDFC FIRST Bank: idfcfirstbank.com") == ["needs_user"]
     assert S("a biobank.com study") == [] and S("RBL notice") == []  # no link, no check
+    assert [c["result"]["status"] for c in lookalike_checks("update at sbі.co.in now")] == ["invalid"]  # Cyrillic i
+    assert lookalike_checks("visit sbi.co.in and नमस्ते.com") == []
     print(f"banks.py checks passed ({len(BANKS)} banks)")
