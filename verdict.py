@@ -1,4 +1,4 @@
-"""Plain rules that turn connector results into verdicts. Claude never decides a verdict.
+"""Plain rules that turn connector results into verdicts. No AI decides a verdict.
 
 Owner: Vihan. Everything a judge sees as "the answer" comes from this file, so it can be read and
 explained line by line. We never call a named firm a "fraud"; we say what the official record shows.
@@ -123,7 +123,7 @@ RED_FLAGS = [
 
 
 def warning_signs(text):
-    """Red flags in the wording, found by fixed patterns (so they work even with no AI)."""
+    """Red flags in the wording, found by fixed patterns."""
     return [{"code": code, "reason": reason, "by": "rules"}
             for code, rx, reason in RED_FLAGS if re.search(rx, text, re.I | re.S)]
 

@@ -11,16 +11,12 @@ import verdict
 from connectors import lists
 
 st.set_page_config(page_title="Parakh", page_icon="🔎", layout="centered")
-LANGS = {"English": "en", "हिन्दी (Hindi)": "hi", "தமிழ் (Tamil)": "ta", "मराठी (Marathi)": "mr"}
+LANGS = {"English": "en", "हिन्दी (Hindi)": "hi"}
 
 with st.sidebar:
     lang = LANGS[st.radio("Reply language", list(LANGS))]
-    if agent.ai_available():
-        st.success(f"AI on: {agent.MODEL}")
-    else:
-        st.warning("Rules-only mode. Add ANTHROPIC_API_KEY to .env to let Claude read screenshots and plan checks.")
-    st.caption("Connected checks: " + ", ".join(t.replace("_", " ") for t in agent.TOOLS))
-    st.caption("Aadhaar and PAN numbers are masked on this computer before anything is sent. "
+    st.caption("Runs on this computer with no external AI service. Connected checks: " + ", ".join(agent.TOOLS))
+    st.caption("Aadhaar and PAN numbers are never looked up or sent anywhere. "
                "We store a fingerprint of each forward, never the forward itself.")
 
 st.title("Parakh")
@@ -35,16 +31,12 @@ def label(key, table):
 def show(report):
     text, colour = label(report["headline"], verdict.HEADLINES)
     st.markdown(f"## :{colour}[{text}]")
-    if report["summary"]:
-        st.caption(f"What the message asks you to do: {report['summary']}")
     st.write(report["explanation"])
-    if report["language"] != lang:
-        st.caption("Press “Check it” again to get the explanation in the newly chosen language.")
 
     if report["flags"]:
         st.subheader("Warning signs in the wording")
         for f in report["flags"]:
-            st.markdown(f"- {f['reason']}" + ("  _(spotted by AI)_" if f["by"] == "AI" else ""))
+            st.markdown(f"- {f['reason']}")
 
     st.subheader("Evidence, item by item")
     by_item = {}
@@ -74,8 +66,7 @@ def show(report):
                     st.caption(f"Limits of this check: {r['limitations']}")
 
     st.subheader("What to do now")
-    steps = verdict.NEXT_STEPS[report["headline"]].get(lang) or (
-        report["next_steps"] if report["language"] == lang else verdict.NEXT_STEPS[report["headline"]]["en"])
+    steps = verdict.NEXT_STEPS[report["headline"]][lang]
     st.markdown("\n".join(f"{i}. {s}" for i, s in enumerate(steps, 1)))
 
 
@@ -85,14 +76,11 @@ with check_tab:
     text = st.text_area("Paste the message", height=170,
                         placeholder="e.g. Invest ₹50,000 with ABC Investments. Our SEBI-registered adviser "
                                     "guarantees 4% monthly returns…")
-    files = st.file_uploader("…or add screenshots or PDFs", type=["png", "jpg", "jpeg", "webp", "pdf"],
-                             accept_multiple_files=True)
+    files = st.file_uploader("…or add a PDF (notice, letter, order)", type=["pdf"], accept_multiple_files=True)
     if st.button("Check it", type="primary"):
         if not text.strip() and not files:
             st.warning("Paste a message or add a file first.")
         else:
-            if any(f.type.startswith("image/") for f in files) and not agent.ai_available():
-                st.warning("Screenshots need AI to read. In rules-only mode only the pasted text and PDFs are checked.")
             with st.status("Investigating…", expanded=True) as status:
                 report = agent.run_check(text, [(f.name, f.getvalue(), f.type) for f in files], lang,
                                          on_step=st.write)
@@ -124,8 +112,10 @@ with sources_tab:
         ("IRDAI insurers and brokers", "IRDAI", "Live pages, cached 24 h", "https://irdai.gov.in/list-of-life-insurers1"),
         ("AMFI mutual fund distributors", "AMFI", "Live search every time", lists.AMFI_PAGE),
         ("ID and link format checks", "Parakh rules", "Offline, never fails", ""),
-        ("SEBI registers", "SEBI", "Rahul's connector" + ("" if agent.sebi else " (not merged yet)"), ""),
-        ("RBI lists", "RBI", "Rahul's connector" + ("" if agent.rbi else " (not merged yet)"), ""),
+        ("SEBI investment advisers", "SEBI", "Live search every time (Rahul's connector)",
+         "https://www.sebi.gov.in/sebiweb/other/OtherAction.do?doRecognisedFpi=yes&intmId=13"),
+        ("RBI lists", "RBI", "Connected" if agent.rbi else "Not connected: RBI blocks scripts, lists must be downloaded by hand",
+         "https://www.rbi.org.in"),
     ]
     st.dataframe(pd.DataFrame(sources, columns=["Source", "Organisation", "How we read it", "Official page"]),
                  hide_index=True, width="stretch",

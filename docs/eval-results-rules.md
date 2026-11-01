@@ -1,4 +1,4 @@
-# Parakh evaluation (rules only mode)
+# Parakh evaluation (rules mode)
 
 23 forwards: 20 scam examples from official advisories and news (some partial or rebuilt from descriptions; see test_forwards), 3 genuine messages.
 A regression gate, not a benchmark: too few forwards to claim an accuracy figure.
@@ -20,7 +20,7 @@ so expect lower numbers on messages the team has never seen. Add fresh forwards 
 | INV-2 | yes | HIGH_RISK | www.yashtradingacademy.com: CONFIRM_OFFICIALLY | guaranteed_returns, sebi_claim_no_number, official_via_link, urgency |
 | INV-3 | yes | HIGH_RISK | cosmofeed.com/vig/643d392830ae100021fa23a1: CONFIRM_OFFICIALLY | guaranteed_returns, tip_group |
 | INV-4 | yes | HIGH_RISK | - | sebi_claim_no_number, admits_unregistered, tip_group |
-| INV-5 | yes | HIGH_RISK | - | sebi_claim_no_number, tip_group, pay_to_resolve |
+| INV-5 | yes | HIGH_RISK | Lazzard Asset Management India: NOT_FOUND | sebi_claim_no_number, tip_group, pay_to_resolve |
 | TAX-1 | yes | CAUTION | - | official_via_link |
 | TAX-2 | yes | CAUTION | ITBA/AST/F/17/2025-26/1035917840: CONFIRM_OFFICIALLY; api.teledema.scoding.com/storage/foi/index.html: CONFIRM_OFFICIALLY | official_via_link |
 | TAX-4 | yes | CAUTION | - | unexpected_money |

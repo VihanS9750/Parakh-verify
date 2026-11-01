@@ -78,7 +78,7 @@ GOV_WORDS = ("incometax", "gst", "cbic", "sebi", "rbi", "uidai", "aadhaar", "epf
 
 
 def find_ids(text):
-    """Every ID-like string in the text, as (kind, value). Used by the no-AI fallback and for masking."""
+    """Every ID-like string in the text, as (kind, value). Used by agent.investigate and for masking."""
     found, seen = [], set()
     for kind, (rx, _, _) in PATTERNS.items():
         for m in re.finditer(rx, text, re.I if kind in ("url", "upi") else 0):
