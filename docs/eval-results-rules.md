@@ -1,6 +1,6 @@
 # Parakh evaluation (rules only mode)
 
-23 forwards: 20 real scams from official advisories and news, 3 genuine messages.
+23 forwards: 20 scam examples from official advisories and news (some partial or rebuilt from descriptions; see test_forwards), 3 genuine messages.
 A regression gate, not a benchmark: too few forwards to claim an accuracy figure.
 The warning-sign rules were written from the same SEBI, RBI, I4C and PIB advisories these examples come from,
 so expect lower numbers on messages the team has never seen. Add fresh forwards before quoting results.
