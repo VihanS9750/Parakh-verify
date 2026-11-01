@@ -95,18 +95,29 @@ def find_ids(text):
     return found
 
 
+# Mobile numbers as people write them: 9876543210, 98765 43210, +91-98765-43210, 09876543210.
+# Not after a letter, digit or "/", so numbers inside IDs (CNR, Income Tax DIN) are left alone.
+PHONE_ANYWHERE = re.compile(r"(?<![\w/])(?:\+?91[\s-]?|0)?[6-9](?:[\s-]?\d){9}(?!\d)"
+                            r"|(?<=[A-Za-z.])[6-9]\d{9}(?=@)")  # also inside a UPI ID: kyc.9876543210@ybl
+HIDDEN = re.compile(r"X{4,}[0-9A-Z]{4}")  # what mask() leaves behind, e.g. XXXXXX3210
+
+
 def mask(text):
-    """Hide Aadhaar, PAN and phone numbers before text leaves this computer. Keeps the last 4 characters,
-    so the AI still knows a number was there."""
+    """Hide Aadhaar, PAN and mobile numbers before text leaves this computer. Keeps the last 4 characters,
+    so the AI still knows a number was there. 9876543210@ybl becomes XXXXXX3210@ybl."""
     for kind, value in find_ids(text):
-        if kind in ("aadhaar", "pan", "phone"):
+        if kind in ("aadhaar", "pan"):  # mobile numbers: PHONE_ANYWHERE below catches more ways of writing them
             text = text.replace(value, "X" * (len(value) - 4) + value[-4:])
-    return text
+    return PHONE_ANYWHERE.sub(lambda m: "XXXXXX" + re.sub(r"\D", "", m.group(0))[-4:], text)
 
 
 def check(value, kind=None):
     """Validate one ID or link. kind is detected when not given."""
     value = value.strip()
+    if HIDDEN.fullmatch(value):  # a number mask() hid from the AI: neutral, never "invalid"
+        return result("Personal number", "Parakh offline rules", value, "needs_user", list_type="format",
+                      detail="A personal number (mobile, Aadhaar or PAN), hidden before the message went to the AI. "
+                             "Parakh never looks up personal numbers. Never share yours with strangers.")
     if not kind:
         kind = next((k for k, v in find_ids(value)), "unknown")
     if kind == "unknown":
@@ -206,8 +217,13 @@ if __name__ == "__main__":
     kinds = [k for k, _ in find_ids("Pay to 9876543210 or ravi@ybl, SEBI reg INA000017523, see bit.ly/x1")]
     assert kinds == ["sebi_reg", "upi", "phone", "url"], kinds
     assert "ABCPE1234F" not in mask("PAN ABCPE1234F")
-    assert mask("Call 9876543210 or +91 98765 43210 now") == "Call XXXXXX3210 or XXXXXXXXXXX3210 now"
-    assert mask("Call +91 9876543210") == "Call XXXXXXXXXX3210"
+    hidden = mask("Call +91-98765-43210 or 98765 43210, pay 9876543210@ybl or kyc.9876543210@ybl, "
+                  "SEBI INA000017523, CNR MHAU019876543210")
+    assert hidden == ("Call XXXXXX3210 or XXXXXX3210, pay XXXXXX3210@ybl or kyc.XXXXXX3210@ybl, "
+                      "SEBI INA000017523, CNR MHAU019876543210"), hidden
+    assert mask("Call +91 9876543210") == "Call XXXXXX3210"
+    assert check("XXXXXX3210")["status"] == "needs_user"  # a hidden number is never "invalid"
     aadhaar = "2345 6789 012" + next(str(c) for c in range(10) if verhoeff_ok("23456789012" + str(c)))
     assert [k for k, _ in find_ids(aadhaar)] == ["aadhaar"]  # a spaced Aadhaar must not also look like a phone
+    assert "2345" not in mask(aadhaar) and mask(aadhaar).endswith(aadhaar[-4:])
     print("ids.py checks passed")

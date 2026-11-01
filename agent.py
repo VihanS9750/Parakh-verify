@@ -6,8 +6,9 @@ Owner: Vihan. One check = four steps:
      plain rules here find the items and pick the checks instead.
   3. verdict.py decides every verdict with fixed rules. The AI never decides a verdict.
   4. The AI explains the result in English or Hindi (a template does it when AI is off).
-The AI only ever gets masked text: Aadhaar, PAN and phone numbers keep just their last 4 characters
-(ids.mask), and images are never sent, only the text Tesseract read from them. Aadhaar/PAN are never looked up.
+The AI only ever gets masked text: Aadhaar, PAN and mobile numbers keep just their last 4 characters
+(ids.mask, applied inside brain.py). Screenshots are read here (OCR) and never sent to the AI: an image
+can't be masked. Aadhaar and PAN are never looked up.
 """
 import io
 import os
@@ -202,12 +203,13 @@ def run_check(text, files=(), language="en", on_step=print):
                 text += "\n" + "\n".join(p.extract_text() or "" for p in pdf.pages)
         elif mime.startswith("image/"):  # read here, never sent anywhere: an image can't be masked
             on_step(f"Reading the text in {name}")
-            seen_text = read_image(data)
-            text += "\n" + seen_text
-            if not seen_text.strip():
+            image_text = read_image(data)
+            if not image_text.strip():
                 on_step(f"Couldn't read any text in {name}" +
-                        ("" if Path(TESSERACT).exists() else " (Tesseract isn't installed)") + ". Paste the text instead.")
-        elif mime.startswith("audio/"):
+                        ("" if Path(TESSERACT).exists() else " (Tesseract isn't installed, see README)") +
+                        ". Screenshots are never sent to the AI, so paste the text instead.")
+            text += "\n" + image_text
+        elif mime.startswith("audio/"):  # parked: not reachable from the app yet (voice notes come after text + images)
             on_step(f"Listening to {name}")
             try:
                 heard = brain.transcribe(data, name)
@@ -219,7 +221,8 @@ def run_check(text, files=(), language="en", on_step=print):
 
     ai = None
     if brain.available() and text.strip():
-        found = brain.investigate(text, list(TOOLS), _run, on_step)  # brain.py masks everything it sends
+        # Only masked text leaves this computer: brain.py runs ids.mask on everything it sends; no images.
+        found = brain.investigate(text, list(TOOLS), _run, on_step)
         if found:
             checks, extra, ai = found
         else:
