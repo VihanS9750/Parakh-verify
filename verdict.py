@@ -151,10 +151,19 @@ RED_FLAGS = [
 ]
 
 
+WARNING_PHRASE = re.compile(r"(?:never|do not|don'?t|not)\s+(?:to\s+)?(?:share|disclose|give|tell|reveal|send|enter)\b[^.\n]{0,40}",
+                            re.I)
+
+
 def warning_signs(text):
-    """Red flags in the wording, found by fixed patterns."""
-    return [{"code": code, "reason": reason, "by": "rules"}
-            for code, rx, reason in RED_FLAGS if re.search(rx, text, re.I | re.S)]
+    """Red flags in the wording, found by fixed patterns. "Never share your OTP" is advice, not a request for it,
+    so that phrase is set aside before looking for an OTP request."""
+    out = []
+    for code, rx, reason in RED_FLAGS:
+        scanned = WARNING_PHRASE.sub(" ", text) if code == "otp_or_remote" else text
+        if re.search(rx, scanned, re.I | re.S):
+            out.append({"code": code, "reason": reason, "by": "rules"})
+    return out
 
 
 HEADLINES = {
@@ -212,7 +221,7 @@ NEXT_STEPS = {
 
 # When one item has several checks, the most telling verdict wins: any red or doubtful finding first,
 # then a register match (which beats a mere "format OK"), then the neutral ones.
-RANK = ["ON_WARNING_LIST", "INVALID", "NOT_FOUND", "NEEDS_CLARIFICATION", "IN_SEBI_ORDER", "HIDDEN_DESTINATION",
+RANK = ["ON_WARNING_LIST", "INVALID", "IN_SEBI_ORDER", "NOT_FOUND", "NEEDS_CLARIFICATION", "HIDDEN_DESTINATION",
         "MATCHED", "COULDNT_VERIFY", "NOT_LISTED", "NO_SEBI_ORDER", "CONFIRM_OFFICIALLY"]
 
 
@@ -229,7 +238,8 @@ def headline(item_keys, flags):
     doubtful = keys & {"NOT_FOUND", "NEEDS_CLARIFICATION"}
     by_rules = [f for f in flags if f.get("by") != "AI"]
     # Warning signs the AI spotted can back up a rule-based finding, but never make a message high risk on their own.
-    if keys & {"ON_WARNING_LIST", "INVALID"} or (flags and doubtful) or (len(flags) >= 2 and by_rules):
+    # Wording alone needs two signs found by the fixed rules; an AI-spotted sign can never be the one that tips it.
+    if keys & {"ON_WARNING_LIST", "INVALID"} or (flags and doubtful) or len(by_rules) >= 2:
         return "HIGH_RISK"
     if keys and keys == {"MATCHED"} and not flags:
         return "CONSISTENT"
@@ -282,5 +292,10 @@ if __name__ == "__main__":
     assert headline(["IN_SEBI_ORDER"], []) == "CAUTION"  # an order alone is evidence to read, not proof
     ai = [{"code": "urgency", "by": "AI"}, {"code": "other", "by": "AI"}]
     assert headline([], ai) == "CAUTION"  # AI alone can't make it high risk
-    assert headline([], ai[:1] + [{"code": "threat", "by": "rules"}]) == "HIGH_RISK"
+    assert headline([], ai[:1] + [{"code": "threat", "by": "rules"}]) == "CAUTION"  # one rule sign + an AI sign: not enough
+    assert headline([], [{"code": "threat", "by": "rules"}, {"code": "urgency", "by": "rules"}]) == "HIGH_RISK"
+    assert not [f for f in warning_signs("SBI: update KYC at sbi.bank.in. Never share your OTP with anyone.")
+                if f["code"] == "otp_or_remote"]  # advice not to share an OTP is not a request for one
+    assert [f["code"] for f in warning_signs("Send me the OTP you just received")] == ["otp_or_remote"]
+    assert item_verdict(["NOT_FOUND", "IN_SEBI_ORDER"]) == "IN_SEBI_ORDER"  # an order names it: more telling than not found
     print("verdict.py checks passed")
