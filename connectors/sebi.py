@@ -18,9 +18,10 @@ SOURCES = {
     "broker":  {"label": "SEBI stock broker register",       "prefix": "INZ"},
 }
 AJAX_URL = "https://www.sebi.gov.in/sebiweb/ajax/other/getintmfpiinfo.jsp"
-# intmId of each register. 13 = investment advisers (captured). For the other two, repeat the
-# DevTools capture on their SEBI pages and read intmId from the Payload tab.
-INTM_IDS = {"adviser": 13, "analyst": None, "broker": None}
+# intmId of each register, read from the links on SEBI's index page
+# https://www.sebi.gov.in/sebiweb/other/OtherAction.do?doRecognised=yes
+# Brokers have one register per segment; 30 = equity segment (the main one).
+INTM_IDS = {"adviser": 13, "analyst": 14, "broker": 30}
 
 
 def page_url(kind):
@@ -31,7 +32,8 @@ def page_url(kind):
 # Words too common in firm names to be useful as a search term on their own.
 GENERIC_WORDS = {"investment", "investments", "adviser", "advisers", "advisor", "advisors",
                  "advisory", "private", "pvt", "limited", "ltd", "llp", "services", "research",
-                 "analyst", "analysts", "securities", "financial", "india", "and", "the", "capital"}
+                 "analyst", "analysts", "securities", "financial", "india", "and", "the", "capital",
+                 "broking", "brokers", "broker", "stock", "stocks", "shares", "trading"}
 
 
 def valid_reg_format(reg_id: str, kind="adviser") -> bool:
@@ -87,6 +89,18 @@ def live_query(kind, name="", reg_no=""):
     return parse_records(r.text, kind)
 
 
+def _query_words(kind, words):
+    """Search SEBI once per word and merge the results (no duplicates)."""
+    pool, seen = [], set()
+    for w in words:
+        time.sleep(1)
+        for r in live_query(kind, name=w):
+            if r["id"] not in seen:
+                seen.add(r["id"])
+                pool.append(r)
+    return pool
+
+
 def live_search(query, kind="adviser"):
     q = query.strip()
     if valid_reg_format(q, kind):
@@ -98,13 +112,10 @@ def live_search(query, kind="adviser"):
     if not recs:
         words = [w for w in q.split() if len(w) >= 3]
         distinctive = [w for w in words if w.lower() not in GENERIC_WORDS]
-        pool, seen = [], set()
-        for w in (distinctive or words)[:4]:  # cap calls; skip generic words like "investment"
-            time.sleep(1)
-            for r in live_query(kind, name=w):
-                if r["id"] not in seen:
-                    seen.add(r["id"])
-                    pool.append(r)
+        terms = (distinctive or words)[:4]  # cap calls; skip generic words like "investment"
+        pool = _query_words(kind, terms)
+        if not pool:  # every word misspelt ("zerodah"): retry with each word's start ("zero")
+            pool = _query_words(kind, [w[:4] for w in terms if len(w) >= 5])
         recs = pool
     return best_matches(q, recs)
 
@@ -135,11 +146,14 @@ def search(query, kind="adviser", csv_path=None, downloaded_on=None):
 
 if __name__ == "__main__":
     import json, sys
-    # python sebi.py "29K Investment Advisers"        -> live search
+    # python sebi.py "29K Investment Advisers"        -> live adviser search
+    # python sebi.py analyst "5paisa"                 -> live search in another register
     # python sebi.py "query" advisers.csv             -> offline backup
     # python sebi.py build saved.html advisers.csv    -> make the backup CSV
-    if sys.argv[1] == "build":
-        print(html_to_csv(sys.argv[2], sys.argv[3]), "records saved")
+    args = sys.argv[1:]
+    kind = args.pop(0) if args[0] in SOURCES else "adviser"
+    if args[0] == "build":
+        print(html_to_csv(args[1], args[2], kind), "records saved")
     else:
-        csv_arg = sys.argv[2] if len(sys.argv) > 2 else None
-        print(json.dumps(search(sys.argv[1], csv_path=csv_arg), indent=2, ensure_ascii=False))
+        csv_arg = args[1] if len(args) > 1 else None
+        print(json.dumps(search(args[0], kind, csv_path=csv_arg), indent=2, ensure_ascii=False))
