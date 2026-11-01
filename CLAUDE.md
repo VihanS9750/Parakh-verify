@@ -10,7 +10,7 @@ Someone forwards a scary notice, a stock tip, an adviser's details or a loan app
 2. the official source checked for each item, with the time of the check,
 3. what to do next (for example, call 1930 or report on cybercrime.gov.in), in English or Hindi.
 
-Input: pasted text, a screenshot (including payment QR codes) or a PDF. Voice notes are parked: the code exists in `brain.transcribe` but the app doesn't expose it, because audio can't be masked.
+Input: pasted text, a screenshot (including payment QR codes) or a PDF. There is no voice-note input: audio can't be masked, and the only free speech-to-text we found is not part of our stack.
 
 Pitch line: **"Don't trust the forward. Verify the evidence."** The product is the verification engine, not a chatbot.
 
@@ -38,7 +38,7 @@ forward (text / screenshot / PDF)
   -> agent.py       1. get the text: pdfplumber, Tesseract OCR (eng+hin, offline), QR decoding (OpenCV, offline)
                     2. brain.py: masks personal numbers, then the AI reads the text and calls our checks as tools
                        (no images are ever sent to the AI)
-                       Gemini 3.5 Flash-Lite (free) -> Groq Qwen 3.8 27B (free) -> plain rules
+                       Gemini 3.5 Flash-Lite (free tier) -> plain rules if it fails or has no key
                        the rules' checks ALWAYS run too (safety net); duplicates are dropped
                        the rules also run the bank check (25 banks' domains), the UPI QR check and the link evidence
                        follow-up: every SEBI register check is followed by a SEBI enforcement-order search
@@ -102,7 +102,7 @@ Careful with what a match means: a registered NBFC doesn't make an app claiming 
 ```
 app.py              Streamlit page                         Vihan / Atharva
 agent.py            pipeline: text, masking, rules checks, follow-ups, report   Vihan
-brain.py            the AI: Gemini -> Groq tool loop, explanation (voice transcription parked)   Vihan
+brain.py            the AI: Gemini tool loop and explanation   Vihan
 verdict.py          verdict rules, warning signs, next steps     Vihan
 store.py            SQLite: list snapshots + check log           Atharva
 eval.py             runs test_forwards/forwards.json             Rahul (scaffolded)
@@ -129,7 +129,7 @@ docs/               build log, market analysis, eval results, fresh-forwards not
 
 ```
 python -m venv .venv && .venv\Scripts\pip install -r requirements.txt
-copy .env.example .env   (free GEMINI_API_KEY and GROQ_API_KEY)
+copy .env.example .env   (add a free GEMINI_API_KEY)
 winget install UB-Mannheim.TesseractOCR   (+ eng/hin tessdata_fast files in tessdata\, see README)
 .venv\Scripts\streamlit run app.py
 .venv\Scripts\python verdict.py ; .venv\Scripts\python -m connectors.ids ; .venv\Scripts\python -m connectors.lists ; .venv\Scripts\python -m connectors.links ; .venv\Scripts\python -m connectors.sebi_orders ; .venv\Scripts\python -m connectors.rbi ; .venv\Scripts\python agent.py ; .venv\Scripts\python brain.py

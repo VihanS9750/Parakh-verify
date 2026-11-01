@@ -1,9 +1,9 @@
 """The AI brain: an AI model reads the forward's text, calls our official-source checks as tools, and
 explains the result in English or Hindi. It never decides a verdict: verdict.py does that.
 
-Owner: Vihan. Providers are tried in order: Gemini (free tier), then Groq (free tier). Both speak the
-OpenAI chat format, so one library (openai) talks to both; only the address, key and model name differ.
-With no key, or if every provider fails, agent.py uses plain rules instead.
+Owner: Vihan. The AI is Gemini on its free tier, reached through the OpenAI chat format (one library,
+openai, so another provider could be added by listing it in PROVIDERS).
+With no key, or if Gemini fails, agent.py uses plain rules instead.
 The AI only ever receives masked text (ids.mask), never an image: an image can't be masked, so screenshots
 are read on this computer by Tesseract and masked like typed text.
 """
@@ -16,11 +16,9 @@ import openai
 
 from connectors import ids
 
-GROQ_URL = "https://api.groq.com/openai/v1"
-# (name, key in .env, address, model). Change a model with GEMINI_MODEL / GROQ_MODEL in .env.
+# (name, key in .env, address, model). Change the model with GEMINI_MODEL in .env.
 PROVIDERS = [
     ("Gemini", "GEMINI_API_KEY", "https://generativelanguage.googleapis.com/v1beta/openai/", "gemini-3.5-flash-lite"),
-    ("Groq", "GROQ_API_KEY", GROQ_URL, "qwen/qwen3.8-27b"),
 ]
 MAX_ROUNDS = 6  # tool-calling rounds before we stop the investigation
 CLAIM_TYPES = {"guaranteed_returns", "urgency", "threat", "pay_to_resolve", "kyc_block", "secrecy",
@@ -155,17 +153,8 @@ def investigate(text, connected, run_tool, on_step):
             checks, extra = _investigate(client, model, text, connected, run_tool, on_step)
             return checks, extra, (client, model, name)
         except (openai.OpenAIError, ValueError, KeyError) as e:  # ValueError covers bad JSON
-            on_step(f"{name} unavailable ({type(e).__name__}); trying the next option.")
+            on_step(f"{name} unavailable ({type(e).__name__}); using the plain rules instead.")
     return None
-
-
-def transcribe(data, filename):
-    """Speech to text for a voice note or call recording, in Hindi or English (Whisper on Groq's free tier).
-    Returns "" when there is no Groq key."""
-    if not os.environ.get("GROQ_API_KEY"):
-        return ""
-    client = openai.OpenAI(api_key=os.environ["GROQ_API_KEY"], base_url=GROQ_URL, timeout=60, max_retries=1)
-    return client.audio.transcriptions.create(model="whisper-large-v3-turbo", file=(filename, data)).text
 
 
 def explain(ai, facts, language):
