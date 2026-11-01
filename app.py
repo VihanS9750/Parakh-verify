@@ -120,6 +120,10 @@ with sources_tab:
         ("IRDAI insurers and brokers", "IRDAI", "Live pages, cached 24 h", "https://irdai.gov.in/list-of-life-insurers1"),
         ("AMFI mutual fund distributors", "AMFI", "Live search every time", lists.AMFI_PAGE),
         ("ID and link format checks", "Parakh rules", "Offline, never fails", ""),
+        ("UPI payment QR codes", "Parakh rules", "Decoded offline (OpenCV); compared with the message. Recipient is never "
+         "verified: a QR's name is typed by its maker", "https://siportal.sebi.gov.in/intermediary/sebi-check"),
+        ("URLhaus malware URL list (links inside QR codes)", "abuse.ch",
+         "Last-30-days export, cached 1 h; needs a free key (URLHAUS_AUTH_KEY)", "https://urlhaus.abuse.ch/"),
         ("SEBI investment advisers", "SEBI", "Live search every time (Rahul's connector)",
          "https://www.sebi.gov.in/sebiweb/other/OtherAction.do?doRecognisedFpi=yes&intmId=13"),
         ("RBI lists", "RBI", "Connected" if agent.rbi else "Not connected: RBI blocks scripts, lists must be downloaded by hand",

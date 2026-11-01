@@ -22,6 +22,8 @@ def _db():
     con.execute("""CREATE TABLE IF NOT EXISTS checks (
         id INTEGER PRIMARY KEY, created_at TEXT, input_hash TEXT, headline TEXT,
         n_items INTEGER, verdicts TEXT, duration_ms INTEGER, mode TEXT)""")
+    con.execute("""CREATE TABLE IF NOT EXISTS handle_sightings (
+        handle_hash TEXT, input_hash TEXT, claim TEXT, seen_at TEXT, PRIMARY KEY (handle_hash, input_hash))""")
     return con
 
 
@@ -73,3 +75,16 @@ def log_check(forward_text, headline, verdicts, duration_ms, mode):
 def recent_checks(limit=50):
     return _db().execute("SELECT created_at, headline, n_items, verdicts, duration_ms, mode, input_hash "
                          "FROM checks ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+
+
+def remember_handle(handle, claim, forward_text):
+    """Note that a UPI handle was in this forward, told as story `claim`. Returns every claim that handle has been
+    seen with in OTHER forwards. Only hashes are kept (of the handle and of the forward), never the handle itself."""
+    h = hashlib.sha256(handle.lower().encode()).hexdigest()[:16]
+    digest = hashlib.sha256(forward_text.encode()).hexdigest()[:16]
+    con = _db()
+    before = {r[0] for r in con.execute("SELECT claim FROM handle_sightings WHERE handle_hash=? AND input_hash!=?",
+                                        (h, digest))}
+    con.execute("INSERT OR IGNORE INTO handle_sightings VALUES (?,?,?,?)", (h, digest, claim, now()))
+    con.commit()
+    return before
