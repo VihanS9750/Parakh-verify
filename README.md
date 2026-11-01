@@ -90,6 +90,7 @@ Read these numbers carefully:
 - **The honest test is the fresh one.** Four scams collected afterwards from family WhatsApp groups were caught **1 of 4** before we changed any rule, because they name nothing checkable (no link, no number, no firm). We then widened four wording rules; that "4 of 4" is no longer independent. Details: [docs/fresh-forwards-note.md](docs/fresh-forwards-note.md).
 - The result that matters most for safety: **no scam was ever rated fine, and no genuine message was rated High risk.** When Parakh can't check anything, it says "Be careful", not "fine".
 - Per-message tables: [docs/eval-results-rules.md](docs/eval-results-rules.md) and [docs/eval-results-ai.md](docs/eval-results-ai.md).
+- **The test sheet:** all 31 messages with their source, Parakh's result for each and the outcome, as a spreadsheet: [docs/test-set-and-results.csv](docs/test-set-and-results.csv). Where each message comes from, with a wording-fidelity note per row: the source register, [docs/source_register.csv](docs/source_register.csv) (Excel copy: [docs/WhatsApp_Test_Source_Register.xlsx](docs/WhatsApp_Test_Source_Register.xlsx)).
 
 ## Not covered yet
 
