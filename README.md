@@ -11,44 +11,47 @@ Built at the Forge AI buildathon (NxtWave), 31 Oct to 1 Nov 2026, by Vihan, Rahu
 ## How it works
 
 ```
-forward (pasted text or PDF)
-  1. find items      connectors/ids.py + agent.org_names   regexes: IDs, UPI IDs, links, organisation names
-  2. pick checks     agent.investigate                     keywords in the message choose the register for each item
+forward (pasted text, screenshot or PDF)
+  1. read the text   agent.read_image (Tesseract OCR), pdfplumber   screenshots are read on the laptop, never sent to the AI
+  2. find + pick     brain.py (AI) and agent.investigate (rules)   Gemini, then Groq, then plain rules choose the checks;
+                                                                   the rules' own checks always run too
   3. check records   connectors/                           live official sources (table below), dated copies if a site is down
   4. decide          verdict.py                            fixed, readable rules turn each result into a verdict
-  5. explain         agent._template_explanation           English or Hindi, with the next steps
+  5. explain         brain.explain (AI) or a template      English or Hindi, with the next steps
   -> app.py shows every item with its source, record, time and a link to the official page
 ```
 
-**No external AI service and no pretrained model.** Everything runs on the laptop, and every verdict can be traced to a line in `verdict.py`. Aadhaar and PAN numbers are never looked up or sent anywhere. The check log stores a fingerprint (hash) of each forward, never the forward itself.
+**The AI investigates and explains; fixed rules decide.** In AI mode the masked text of the forward is sent to Google (Gemini) or, if that fails, Groq (Qwen), both on free tiers. Aadhaar, PAN and mobile numbers keep only their last 4 characters first (`ids.mask`); other details in the text, such as names, UPI IDs and links, are sent as written. Images are never sent. With no API key the app runs rules-only, entirely on the laptop. Every verdict can be traced to a line in `verdict.py`; an AI-spotted warning sign must quote words that are really in the message and can't make a message High risk alone. Aadhaar and PAN are never looked up. The check log stores a fingerprint (hash) of each forward, never the forward itself.
 
 ## Official sources
 
 | Source | How Parakh reads it | Status (tested 1 Nov 2026 from India) |
 |---|---|---|
-| SEBI investment adviser register | Live search, same request as SEBI's own search page (Rahul, `connectors/sebi.py`) | Working |
+| SEBI investment advisers, research analysts, brokers | Live search, same request as SEBI's own search page (Rahul, `connectors/sebi.py`) | Working |
+| SEBI enforcement orders | Live search of order titles (`connectors/sebi_orders.py`) | Working; titles only, the order text is not read |
 | UGC list of fake universities (32 names, February 2026) | Live page, cached 24 h | Working |
 | IRDAI life, general and health insurers and brokers | Live pages, cached 24 h | Working |
 | AMFI mutual fund distributors | Live search behind AMFI's public page | Working |
 | GSTIN, PAN, CIN, eCourts CNR, Income Tax DIN, CBIC DIN, SEBI numbers, AMFI ARN, UPI IDs, links | Offline format and check-digit rules, plus the official page to confirm | Working |
-| RBI lists (NBFCs, Alert List) | RBI returns HTTP 418 to scripts, so lists must be downloaded by hand (`connectors/local_list.py`) | Not connected yet |
+| RBI Alert List, registered and cancelled NBFCs | RBI returns HTTP 418 to scripts, so the lists were downloaded by hand on 1 Nov 2026 and are searched offline (`data/`, Rahul) | Connected; every result states the list's own date (NBFC lists as on 30 Sep 2026, Alert List updated 19 Nov 2025) |
+| Website age, short-link destination | Public RDAP registry and the shortener's redirect header (`connectors/links.py`) | Working; no record for some `.edu` and country domains |
 | MCA, GST, eCourts, Income Tax portals | Captcha, OTP or login: format check and link only. We never get around a block. | By design |
 
 Our user agent says who we are, and we make at most one request per second per site.
 
 ## Verdicts
 
-Each item gets one of eight verdicts, such as *Matches the official record*, *On an official warning list*, *Not found in the checked register* or *Couldn't verify right now*. The message as a whole is rated **High risk**, **Be careful** or **Consistent with official records**.
+Each item gets one of eleven verdicts, such as *Matches the official record*, *On an official warning list*, *Not found in the checked register* or *Couldn't verify right now*. The message as a whole is rated **High risk**, **Be careful** or **Consistent with official records**.
 
 Parakh never calls a named firm a fraud. It says what the official record shows and when it was checked. The full rules are in [CLAUDE.md](CLAUDE.md#verdicts-verdictpy-plain-rules) and [verdict.py](verdict.py).
 
 ## Test results
 
-The test set is 23 messages in [test_forwards/forwards.json](test_forwards/forwards.json), each with its source: 20 scams from SEBI orders, PIB debunks, police advisories and news, and 3 genuine messages. Full table: [docs/eval-results-rules.md](docs/eval-results-rules.md).
+The test set is 23 messages in [test_forwards/forwards.json](test_forwards/forwards.json), each with its source: 20 scams from SEBI orders, PIB debunks, police advisories and news, and 3 genuine messages. Full table: [docs/eval-results-rules.md](docs/eval-results-rules.md) and [docs/eval-results-ai.md](docs/eval-results-ai.md).
 
 | Measure | Result |
 |---|---|
-| Scams rated High risk | 13 of 20 (95% range 43% to 82%) |
+| Scams rated High risk | 16 of 20 rules-only, 19 of 20 with AI (see the two results files) |
 | Scams wrongly rated Consistent (the dangerous error) | 0 of 20 |
 | Genuine messages wrongly rated High risk | 0 of 3 |
 
