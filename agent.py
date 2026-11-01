@@ -313,7 +313,7 @@ def run_check(text, files=(), language="en", on_step=print):
     items = {item: verdict.item_verdict(keys) for item, keys in items.items()}
     headline = verdict.headline(items.values(), flags)
     report = {"headline": headline, "checks": checks, "items": items, "flags": flags, "language": language,
-              "summary": extra.get("summary", ""), "evidence": verdict.evidence_strength(items.values(), flags), "mode": f"AI: {ai[2]}" if ai else "rules only",
+              "summary": extra.get("summary", ""), "evidence": verdict.evidence_strength([c["verdict"] for c in checks], flags), "mode": f"AI: {ai[2]}" if ai else "rules only",
               "next_steps": verdict.NEXT_STEPS[headline].get(language) or verdict.NEXT_STEPS[headline]["en"]}
     report["explanation"] = _template_explanation(report)
     if ai:
