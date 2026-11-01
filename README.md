@@ -6,7 +6,7 @@ Parakh takes a forwarded message, screenshot or PDF, pulls out everything that c
 
 Built at the Forge AI buildathon (NxtWave), 31 Oct to 1 Nov 2026, for **Theme 1, problem T1.4: fact-verification**. Team: Vihan, Rahul and Atharva.
 
-**Live app:** _add the hosted URL here before submitting_
+**Live app:** https://parakh-verify.streamlit.app/
 
 ## The problem
 
