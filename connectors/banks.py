@@ -97,8 +97,12 @@ def imitates(host, brands):
     return any(b in host if len(b) >= 6 else re.search(rf"(?<![a-z0-9]){b}(?![a-z0-9])", host) for b in brands)
 
 
+UPI_HANDLE = re.compile(r"[\w.\-]+@[a-z][a-z0-9]*(?!\w|\.\w)", re.I)
+
+
 def banks_named(text, hosts=()):
     """Banks named in the message text, or imitated by a link's own name."""
+    text = UPI_HANDLE.sub(" ", text)  # swiggy@icici is a payment handle, not the message naming ICICI Bank
     return [key for key, (_, _, rx, _, brands, _) in BANKS.items()
             if re.search(rx, text, re.I) or any(imitates(h, brands) for h in hosts)]
 
@@ -164,6 +168,7 @@ if __name__ == "__main__":
     assert on_domain("sbi.co.in", BANKS["SBI"][1]) and on_domain("retail.onlinesbi.sbi", BANKS["SBI"][1])
     assert not on_domain("sbi.co.in.evil.com", BANKS["SBI"][1]) and not on_domain("evil-sbi.co.in", BANKS["SBI"][1])
     assert banks_named("Dear SBI customer") == ["SBI"] and banks_named("SBI Card offer") == []
+    assert banks_named("paid to swiggy@icici. Thanks") == []
     assert banks_named("HDFC Life policy") == [] and banks_named("Your Axis Bank account") == ["Axis Bank"]
     assert banks_named("Reserve Bank of India circular, State Bank of India") == ["SBI"]  # no mix-ups
     assert banks_named("Indian Overseas Bank alert") == ["Indian Overseas Bank"] and banks_named("Kotak Securities") == []
