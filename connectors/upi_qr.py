@@ -8,23 +8,21 @@ Decoding is offline (OpenCV); the picture is never sent anywhere, like every scr
 import re
 from urllib.parse import parse_qs, unquote, urlparse
 
-import cv2
-import numpy as np
-
 import store
 from connectors.net import result
 
 SEBI_CHECK = "https://siportal.sebi.gov.in/intermediary/sebi-check"
 
-# What the message promises, in words. Order matters only for the label we remember in handle memory.
+# What the message promises, in words. Narrow on purpose: a normal bill must not trip these.
 CLAIMS = [
-    ("refund_or_prize", r"refund|cash ?back|prize|you(?:'ve| have)? won|lottery|reward|receive|credited|claim"),
+    ("refund_or_prize", r"(?:refund|cash ?back|prize|lottery|reward|you(?:'ve| have)? won)\b.{0,80}\b(?:scan|qr)\b|"
+                        r"\b(?:scan|qr)\b[^.]{0,40}\b(?:to|and)\s+(?:receive|claim|collect|get your)"),
     ("government", r"income ?tax|\bGST\b|customs|police|court|e-?challan|\bRTO\b|\bTRAI\b|\bEPFO\b|\bUIDAI\b|"
                    r"ministry|government of india|\bCBI\b|enforcement directorate|penalty|fine of"),
-    ("bank", r"\b(?:SBI|HDFC|ICICI|Axis|PNB|Kotak|bank)\b|\bKYC\b"),
+    ("bank", r"\bKYC\b|account\b.{0,30}(?:block|suspend|freez|deactivat)|bank (?:account )?(?:verification|update)"),
     ("investment", r"\bSEBI\b|invest|stock|trading|advis|tips?\b|returns?\b|demat"),
 ]
-MONEY_IN = re.compile(CLAIMS[0][1], re.I)
+MONEY_IN = re.compile(CLAIMS[0][1], re.I | re.S)
 NOT_BY_QR = {  # claims for which a forwarded QR is never how the money is really collected or sent
     "government": "Government dues are not collected through a QR sent in a message.",
     "bank": "A bank never asks you to scan a QR to fix your account or KYC.",
@@ -33,6 +31,11 @@ NOT_BY_QR = {  # claims for which a forwarded QR is never how the money is reall
 
 def decode(data):
     """The text inside the first QR code in an image (bytes), or "" if there is none or it can't be read."""
+    try:
+        import cv2
+        import numpy as np
+    except ImportError:  # OpenCV not installed: no QR reading, but the rest of Parakh must keep working
+        return ""
     img = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
     if img is None:
         return ""
@@ -82,8 +85,11 @@ def check(payload, message=""):
              + ". Recipient unverified: no one can confirm who owns the account from the QR.")
 
     problems = []
+    message = f"{message} {upi['note']}"  # the QR's own note is part of the story it tells
     kind = claim_kind(message)
-    if upi["action"] != "pay" or re.search(r"\bcollect\b", payload, re.I):
+    if upi["action"] == "mandate":
+        problems.append("This sets up a recurring automatic debit, not a one-time payment.")
+    elif upi["action"] != "pay":
         problems.append("This is a payment request, not a receipt.")
     if MONEY_IN.search(message):
         problems.append("The message says you will receive money, but scanning a QR only ever sends money.")
@@ -94,7 +100,7 @@ def check(payload, message=""):
         problems.append("The payee is a personal mobile-number handle, not an organisation's account.")
 
     seen = store.remember_handle(handle, kind, payload + message)  # claims this handle was used for in other forwards
-    others = sorted(seen - {kind})
+    others = sorted(seen - {kind, "other"}) if kind != "other" else []  # two specific, different stories
     if others:
         problems.append(f"This same account appeared in other forwards with different stories "
                         f"({', '.join(o.replace('_', ' ') for o in others)}).")
@@ -137,6 +143,6 @@ if __name__ == "__main__":
     assert check("upi://pay?pa=alphawealth@validhdfc&pn=Alpha", "")["source_url"] == SEBI_CHECK
     assert parse("https://example.com") is None
     a = check("upi://pay?pa=x1@ybl&am=1", "Income Tax Department penalty, pay now")
-    b = check("upi://pay?pa=x1@ybl&am=1", "You won a lottery prize, claim now")
+    b = check("upi://pay?pa=x1@ybl&am=1", "You won a lottery prize. Scan this QR to claim it.")
     assert "other forwards" in b["detail"], b["detail"]
     print("upi_qr.py checks passed")

@@ -67,7 +67,7 @@ winget install UB-Mannheim.TesseractOCR
 .venv\Scripts\streamlit run app.py
 ```
 
-**UPI QR codes:** a QR in a screenshot is decoded offline (OpenCV, `connectors/upi_qr.py`) and compared with the message: it says what the QR will do (it sends money, how much, to which handle) and never claims the recipient is verified. A QR holding a link is checked against abuse.ch's URLhaus list (free `URLHAUS_AUTH_KEY` in `.env`). Handle memory in `parakh.db` keeps only hashes.
+**UPI QR codes:** a QR in a screenshot is decoded offline (OpenCV, `connectors/upi_qr.py`) and compared with the message: it says what the QR will do (it sends money, how much, to which handle) and never claims the recipient is verified. A QR holding a link is checked against abuse.ch's URLhaus list (free `URLHAUS_AUTH_KEY` in `.env`). Handle memory in `parakh.db` keeps only hashes of the handle (pseudonymised, not anonymous: reset the database before a demo).
 
 Screenshots are read offline by Tesseract. For Hindi, put `eng.traineddata` and `hin.traineddata` from github.com/tesseract-ocr/tessdata_fast in a `tessdata\` folder here (not committed). Without a key the app runs in rules-only mode. Without Tesseract, screenshots can't be read: images are never sent to the AI, because an image can't be masked. Before any text goes to the AI, Aadhaar, PAN and phone numbers are masked to their last 4 characters.
 
