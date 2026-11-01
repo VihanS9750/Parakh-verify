@@ -74,7 +74,7 @@ def org_names(text):
     names = []
     text = re.sub(r"\b(Pvt|Ltd|Co|Inc|No|Regn)\.", r"\1", text)  # so a full stop can end a phrase
     for m in PHRASE.finditer(text):
-        name = re.sub(r"\s+(?:of|for|and|&)$", "", m.group(0).strip(" .,"))
+        name = re.sub(r"\s+(?:of|for|and|&)$", "", " ".join(m.group(0).split()).strip(" .,"))  # one line, even across OCR line breaks
         if len(name.split()) >= 2 and ORG_WORDS.search(name) and name not in names:
             names.append(name)
     return names
@@ -167,6 +167,13 @@ def run_check(text, files=(), language="en", on_step=print):
             on_step("AI unavailable; switching to rules-only checks.")
     if not ai:
         checks, extra = investigate(text, on_step), {}
+    else:
+        # Safety net: the rules' checks run too, so a name the AI shortened or skipped is still checked in full.
+        # An AI check is dropped when the rules checked the same thing with the same source
+        # (one item contains the other, e.g. "AIIPHS" in the full name, or "U651..." in "CIN: U651...").
+        rule_checks = investigate(text, on_step)
+        same = lambda a, b: a["tool"] == b["tool"] and (a["item"].lower() in b["item"].lower() or b["item"].lower() in a["item"].lower())
+        checks = [c for c in checks if not any(same(c, r) for r in rule_checks)] + rule_checks
 
     flags = verdict.warning_signs(text + "\n" + extra.get("text_in_images", ""))
     seen = {f["code"] for f in flags}
