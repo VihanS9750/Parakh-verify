@@ -111,6 +111,8 @@ winget install UB-Mannheim.TesseractOCR
 
 For Hindi screenshots, put `eng.traineddata` and `hin.traineddata` from github.com/tesseract-ocr/tessdata_fast in a `tessdata\` folder here (not committed). Without a key the app runs rules-only. Without Tesseract, screenshots can't be read; paste the text instead.
 
+**Hosting (Streamlit Community Cloud):** deploy `app.py` from this repo; `packages.txt` installs Tesseract with English and Hindi. Put `GEMINI_API_KEY` and `GROQ_API_KEY` (and optionally `URLHAUS_AUTH_KEY`) in the app's secrets; with none, the hosted app runs rules-only. Some Indian government sites may answer a cloud server differently from a laptop in India, so the sources then show "couldn't verify right now" instead of guessing.
+
 Self-checks (the connector ones run live lookups):
 
 ```
