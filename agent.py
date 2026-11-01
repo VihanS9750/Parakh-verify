@@ -274,15 +274,19 @@ def run_check(text, files=(), language="en", on_step=print):
             checks.append({"item": c["item"], "tool": "SEBI enforcement orders",
                            "result": _run("SEBI enforcement orders", c["item"])})
 
-    for qr in qr_codes:  # a QR is compared with the words that came with it
-        if upi_qr.parse(qr):
-            item = f"UPI QR to {upi_qr.parse(qr)['handle']}"
-            on_step(f"Checking “{item}” against the message")
-            checks.append({"item": item, "tool": "UPI QR check", "result": upi_qr.check(qr, text)})
-        else:  # any other QR (a link, usually) goes through the link check
+    for qr in dict.fromkeys(qr_codes):  # each distinct QR once, even if it is in two screenshots
+        upi = upi_qr.parse(qr)
+        if upi:  # named by the bare handle, so it sits with the ID check of the same handle if the text has it
+            on_step(f"Checking “{upi['handle']}” against the message")
+            checks.append({"item": upi["handle"], "tool": "UPI QR check", "result": upi_qr.check(qr, text)})
+        elif re.match(r"https?://", qr, re.I):  # a link goes through the same checks as a link typed in the message
+            claim = GOV_CLAIM.search(text)
             on_step(f"Checking the QR's link “{qr[:60]}”")
-            checks.append({"item": qr[:80], "tool": "ID and link check", "result": ids.check_link(qr)})
+            for tool, fn in (("ID and link check", ids.check_link), ("Website age and redirect check", links.inspect)):
+                checks.append({"item": qr[:80], "tool": tool, "result": fn(qr, claim.group(0) if claim else "")})
             checks.append({"item": qr[:80], "tool": "URLhaus malware URL list", "result": urlhaus.check(qr)})
+        else:
+            on_step("The QR holds something that is neither a UPI payment nor a link, so it was not checked.")
 
     flags = verdict.warning_signs(text)
     seen = {f["code"] for f in flags}
