@@ -1,17 +1,17 @@
 # Parakh evaluation (rules only mode)
 
-23 forwards: 20 scam examples from official advisories and news (some partial or rebuilt from descriptions; see test_forwards), 3 genuine messages.
+31 forwards: 24 scam examples from official advisories, news and family WhatsApp groups (some partial or rebuilt from descriptions; see test_forwards), 7 genuine messages.
 A regression gate, not a benchmark: too few forwards to claim an accuracy figure.
 The warning-sign rules were written from the same SEBI, RBI, I4C and PIB advisories these examples come from,
 so expect lower numbers on messages the team has never seen. Add fresh forwards before quoting results.
 
 | Measure | Result |
 |---|---|
-| Scams rated **High risk** | 16 of 20 (95% range 58% to 92%) |
-| Scams rated **Be careful** (not confirmed, not condemned) | 4 of 20 |
-| Scams wrongly rated **Consistent** (the dangerous error) | 0 of 20 |
-| Genuine messages wrongly rated **High risk** | 0 of 3 (95% range 0% to 56%) |
-| Genuine messages rated **Consistent** | 2 of 3 |
+| Scams rated **High risk** | 17 of 24 (95% range 51% to 85%) |
+| Scams rated **Be careful** (not confirmed, not condemned) | 7 of 24 |
+| Scams wrongly rated **Consistent** (the dangerous error) | 0 of 24 |
+| Genuine messages wrongly rated **High risk** | 0 of 7 (95% range 0% to 35%) |
+| Genuine messages rated **Consistent** | 2 of 7 |
 | Median time per check | 0.0 s |
 
 | ID | Real scam? | Result | Items checked | Warning signs |
@@ -39,3 +39,11 @@ so expect lower numbers on messages the team has never seen. Add fresh forwards 
 | GEN-3 | no | CAUTION | U65100KA2016PTC092879: CONFIRM_OFFICIALLY; INZ000301838: MATCHED; ARN-111686: MATCHED; Groww Invest Tech Pvt Ltd: MATCHED | - |
 | GEN-AMFI | no | CONSISTENT | ARN-108: MATCHED | - |
 | GEN-LIC | no | CONSISTENT | Life Insurance Corporation of India: MATCHED | - |
+| FRESH-1 | yes | CAUTION | - | urgency |
+| FRESH-2 | yes | HIGH_RISK | - | urgency, kyc_block |
+| FRESH-3 | yes | CAUTION | - | - |
+| FRESH-4 | yes | CAUTION | - | - |
+| FRESH-5 | no | CAUTION | - | - |
+| FRESH-6 | no | CAUTION | - | - |
+| FRESH-7 | no | CAUTION | - | - |
+| FRESH-8 | no | CAUTION | Care Health Insurance: NEEDS_CLARIFICATION | - |

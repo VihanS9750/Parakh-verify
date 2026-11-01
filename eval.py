@@ -51,7 +51,7 @@ def main():
     lines = [
         f"# Parakh evaluation ({rows[0]['mode']} mode)",
         "",
-        f"{len(rows)} forwards: {len(scams)} scam examples from official advisories and news (some partial or rebuilt from descriptions; see test_forwards), {len(genuine)} genuine messages.",
+        f"{len(rows)} forwards: {len(scams)} scam examples from official advisories, news and family WhatsApp groups (some partial or rebuilt from descriptions; see test_forwards), {len(genuine)} genuine messages.",
         "A regression gate, not a benchmark: too few forwards to claim an accuracy figure.",
         "The warning-sign rules were written from the same SEBI, RBI, I4C and PIB advisories these examples come from,",
         "so expect lower numbers on messages the team has never seen. Add fresh forwards before quoting results.",
