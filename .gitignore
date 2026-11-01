@@ -5,3 +5,4 @@ __pycache__/
 test_forwards/private/
 docs/eval-results-*.md.bak
 .DS_Store
+tessdata/

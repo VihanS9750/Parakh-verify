@@ -59,8 +59,12 @@ This is a regression check, not an accuracy claim. The sample is small, and the 
 ```
 python -m venv .venv
 .venv\Scripts\pip install -r requirements.txt
+copy .env.example .env          (add a free Gemini key from aistudio.google.com; Groq key optional)
+winget install UB-Mannheim.TesseractOCR
 .venv\Scripts\streamlit run app.py
 ```
+
+Screenshots are read offline by Tesseract. For Hindi, put `eng.traineddata` and `hin.traineddata` from github.com/tesseract-ocr/tessdata_fast in a `tessdata\` folder here (not committed). Without a key the app runs in rules-only mode; without Tesseract, Gemini still reads screenshots.
 
 Self-checks, which run live lookups:
 
@@ -70,6 +74,7 @@ Self-checks, which run live lookups:
 .venv\Scripts\python -m connectors.lists
 .venv\Scripts\python -m connectors.sebi "29K Investment Advisers"
 .venv\Scripts\python agent.py
+.venv\Scripts\python brain.py      (checks the AI keys and model names)
 .venv\Scripts\python eval.py
 ```
 
