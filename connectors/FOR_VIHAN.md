@@ -4,13 +4,9 @@ Hi Claude! This explains the "money" connectors Rahul built for Parakh: what eac
 
 ## 1. Setup
 
-- Copy **both** `connectors/` and `data/` into the project root as sibling folders. The RBI connectors find their files at `connectors/../data/`.
-- The modules import each other by bare name (`from base import result`), so put `connectors/` on the path before importing:
-  ```python
-  import sys; sys.path.insert(0, "connectors")
-  import sebi, rbi_nbfc, rbi_alert_list
-  ```
-- Install: `pip install requests beautifulsoup4 rapidfuzz pdfplumber openpyxl`
+- Merged into the main Parakh code (PR #1). Import as a package from the project root: `from connectors import sebi, rbi, rbi_nbfc, rbi_alert_list`. `data/` must stay next to `connectors/`.
+- **`agent.py` already uses these:** `agent._sebi` → `sebi.search(q, "adviser")`, and `rbi.search_rbi(name)` → the RBI lists in the team contract (`connectors/net.result`). The tables below describe the underlying functions, which return Rahul's shape (§3).
+- Install: `pip install requests beautifulsoup4 rapidfuzz pdfplumber openpyxl` (`openpyxl` only for rebuilding the NBFC CSVs)
 - The connectors make **no Claude calls**. They're plain Python and **never raise**: on any error they return `status: "unavailable"` with the reason in `note`.
 
 ## 2. The functions
@@ -89,12 +85,12 @@ Pull out each **firm/platform name, registration number and website** mentioned 
 ## 7. Quick test (run from the project root)
 
 ```bash
-cd connectors
-python sebi.py "29K Investment Advisers"        # found, INA200000365, 100
-python sebi.py broker "zerodah broking"          # found, ZERODHA BROKING LIMITED, 93
-python rbi_nbfc.py "bajaj finanse"               # found, Bajaj Finance Limited, 92
-python rbi_alert_list.py "https://www.exness.com/in"   # found on Alert List (warning), 100
-python rbi_alert_list.py "Zerodha"               # not_found
+python -m connectors.sebi "29K Investment Advisers"            # found, INA200000365, 100
+python -m connectors.sebi broker "zerodah broking"             # found, ZERODHA BROKING LIMITED, 93
+python -m connectors.rbi_nbfc "bajaj finanse"                  # found, Bajaj Finance Limited, 92
+python -m connectors.rbi_alert_list "https://www.exness.com/in"  # found on Alert List (warning), 100
+python -m connectors.rbi_alert_list "Zerodha"                  # not_found
+python -m connectors.rbi                                       # search_rbi checks, prints "rbi.py check passed"
 ```
 
 Questions → Rahul (GitHub `singularity713`).

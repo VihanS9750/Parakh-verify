@@ -6,8 +6,8 @@ import os
 import re
 from urllib.parse import urlparse
 
-from base import result, safe
-from local_list import load_csv, pdf_to_csv, search_list
+from connectors.base import result, safe
+from connectors.local_list import load_csv, pdf_to_csv, search_list
 
 SOURCE = "RBI Alert List (unauthorised forex platforms)"
 SOURCE_URL = "https://www.rbi.org.in/Scripts/bs_viewcontent.aspx?Id=4235"
@@ -56,8 +56,8 @@ def search(query):
 
 if __name__ == "__main__":
     import json, sys
-    # python rbi_alert_list.py build        -> PDF to CSV (run once after downloading)
-    # python rbi_alert_list.py "Exness"     -> search by name or website
+    # python -m connectors.rbi_alert_list build        -> PDF to CSV (run once after downloading)
+    # python -m connectors.rbi_alert_list "Exness"     -> search by name or website
     if sys.argv[1] == "build":
         print(pdf_to_csv(PDF_PATH, CSV_PATH, name_col=1, id_col=2), "entries saved")
     else:

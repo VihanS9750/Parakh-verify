@@ -5,8 +5,8 @@ import csv
 import os
 import re
 
-from base import safe
-from local_list import search_list
+from connectors.base import safe
+from connectors.local_list import search_list
 
 SOURCE_URL = "https://www.rbi.org.in/Scripts/BS_NBFCList.aspx"
 LIST_DATE = "2026-09-30"      # "as on" date printed in both files
@@ -76,9 +76,9 @@ def search_cancelled(query):
 
 if __name__ == "__main__":
     import json, sys
-    # python rbi_nbfc.py build                -> both Excel files to CSV (run once)
-    # python rbi_nbfc.py "Bajaj Finance"      -> registered list
-    # python rbi_nbfc.py cancelled "Agroha"   -> cancelled list
+    # python -m connectors.rbi_nbfc build                -> both Excel files to CSV (run once)
+    # python -m connectors.rbi_nbfc "Bajaj Finance"      -> registered list
+    # python -m connectors.rbi_nbfc cancelled "Agroha"   -> cancelled list
     if sys.argv[1] == "build":
         print(build("registered"), "registered rows,", build("cancelled"), "cancelled rows")
     elif sys.argv[1] == "cancelled":

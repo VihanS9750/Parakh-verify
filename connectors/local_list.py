@@ -4,8 +4,8 @@ import csv
 import os
 from datetime import datetime
 
-from base import result
-from matching import best_matches, find_by_id
+from connectors.base import result
+from connectors.matching import best_matches, find_by_id
 
 
 def pdf_to_csv(pdf_path, csv_path, name_col=1, id_col=None):
