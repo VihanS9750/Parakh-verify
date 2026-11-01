@@ -57,7 +57,7 @@ PATTERNS = {
     "arn": (r"\bARN[-\s]?\d{1,7}\b", "AMFI distributor code (ARN)", "https://www.amfiindia.com/locate-distributor"),
     "upi": (r"\b[\w.-]{2,64}@[A-Za-z]{2,64}\b(?!\.\w)", "UPI ID", "https://siportal.sebi.gov.in/intermediary/sebi-check"),
     "phone": (r"(?:\+91[\s-]?)?\b[6-9]\d{9}\b", "Mobile number", "https://sancharsaathi.gov.in/sfc/"),
-    "url": (r"(?:https?://|www\.)[^\s<>\"']+|(?<![@\w.-])[a-z0-9-]+(?:\.[a-z0-9-]+)*"
+    "url": (r"\b(?:https?://|www\.)[^\s<>\"']+|(?<![@\w.-])[a-z0-9-]+(?:\.[a-z0-9-]+)*"
             r"\.(?:apk|in|com|net|org|xyz|top|online|site|info|ly|gd|at|cc|io|app|link)(?:/[^\s<>\"']*)?",
             "Link", ""),
 }
@@ -158,14 +158,21 @@ def check(value, kind=None):
                   limitations="A valid format doesn't prove the ID was really issued. Confirm it on the official page.")
 
 
-def check_link(url):
-    """Flag links that pretend to be government sites, shorteners that hide the destination, and app files."""
+OFFICIAL_NON_GOV = {"rbi.org.in", "npci.org.in"}  # official bodies whose sites aren't on .gov.in
+
+
+def check_link(url, claimed_body=""):
+    """Flag links that pretend to be government sites, shorteners that hide the destination, and app files.
+    claimed_body: the government body the message says it comes from (e.g. "Income Tax Department"), if any."""
     host = urlparse(url if "://" in url else "http://" + url).netloc.lower().removeprefix("www.")
     path = url.lower()
     problems = []
-    if host.endswith((".gov.in", ".nic.in")):
+    if host.endswith((".gov.in", ".nic.in")) or host in OFFICIAL_NON_GOV:
         detail = f"{host} is on an official Indian government domain."
     else:
+        if claimed_body:
+            problems.append(f"The message says it is from {claimed_body}, but {host} is not a government site "
+                            "(.gov.in or .nic.in).")
         if any(w in host for w in GOV_WORDS):
             problems.append(f"{host} uses a government-sounding name but is not on .gov.in or .nic.in.")
         if host in SHORTENERS:
@@ -187,6 +194,9 @@ if __name__ == "__main__":
     assert check("https://incometax-refund.in/claim")["status"] == "invalid"
     assert check("https://www.incometax.gov.in/iec/foportal/")["status"] == "needs_user"
     assert check("bit.ly/abc123")["status"] == "invalid"
+    assert find_ids("Click: https://wwtax.icu") == [("url", "https://wwtax.icu")]  # any https link, any ending
+    assert check_link("https://wwtax.icu", "Income Tax Department")["status"] == "invalid"
+    assert check_link("https://www.incometax.gov.in/iec/", "Income Tax Department")["status"] == "needs_user"
     assert check("ravi.sharma@ybl")["detail"].startswith("Ordinary UPI")
     assert "stock broker" in check("abc.brk@validhdfc")["detail"]
     assert [k for k, _ in find_ids("Ref ITBA/AST/F/17/2025-26/1035917840 and CBIC-2024 11 DL00 123456")] == \

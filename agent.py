@@ -107,9 +107,17 @@ def org_names(text):
     return names
 
 
+# A message presenting itself as coming from a government body. SEBI and RBI are left out on purpose:
+# genuine brokers and lenders write "SEBI registered" or "RBI registered NBFC" all the time.
+GOV_CLAIM = re.compile(r"income ?tax department|assessment order|\bGST (?:department|council)|customs department|"
+                       r"\bpolice\b|cyber ?cell|\bcourt\b|e-?challan|\bRTO\b|traffic police|\bTRAI\b|\bEPFO\b|"
+                       r"\bUIDAI\b|ministry of|government of india|india post|\bCBI\b|enforcement directorate", re.I)
+
+
 def investigate(text, on_step):
     """Regexes find IDs and organisation names; keywords in the message pick the register for each."""
     checks = []
+    claim = GOV_CLAIM.search(text)
 
     def add(item, tool, value):
         on_step(f"Checking “{item}” with the {tool}")
@@ -118,7 +126,12 @@ def investigate(text, on_step):
     for kind, value in ids.find_ids(text):
         if kind in ("aadhaar", "pan"):
             continue  # never sent anywhere; nothing to look up
-        add(value, "ID and link check", value)
+        if kind == "url" and claim:  # a "government" message: the link must be on a government site
+            on_step(f"Checking “{value}” with the ID and link check")
+            checks.append({"item": value, "tool": "ID and link check",
+                           "result": ids.check_link(value, claim.group(0))})
+        else:
+            add(value, "ID and link check", value)
         if kind == "arn":
             add(value, "AMFI distributor register", value)
         if kind == "sebi_reg" and value.upper()[:3] in SEBI_PREFIX and sebi:

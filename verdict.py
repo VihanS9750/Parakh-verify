@@ -50,6 +50,9 @@ def decide(r, claimed_id=""):
         hint = f" Closest name: '{top['name']}' ({top['score']}% match)." if top else ""
         return "NOT_FOUND", f"No record matching '{r['query']}' in the {r['source']}.{hint}"
     rivals = [m for m in r["matches"][1:] if m["score"] >= top["score"] - RIVAL_GAP]
+    same = [m for m in r["matches"] if claimed_id and m["score"] >= STRONG and m.get("id") and _same_id(claimed_id, m["id"])]
+    if same:  # several similar names, but the message's own number picks one of them
+        top, rivals = same[0], []
     if top["score"] < STRONG or rivals:
         others = f" and {len(rivals)} other similar name(s)" if rivals else ""
         return "NEEDS_CLARIFICATION", (f"Closest record is '{top['name']}' {top.get('id', '')} "
@@ -90,6 +93,10 @@ RED_FLAGS = [
      r"\bRTO\b|government|ministry))(?=.*(?:click|link|https?://|www\.|\.apk|download|"
      r"\.(?:com|net|org|xyz|icu|top|site|online|info|link)\b))",
      "Claims to come from a government body but asks you to act through a link or app. Check notices on the official portal yourself."),
+    ("bank_details_link",
+     r"(?:update|verify|confirm|enter|submit)\s+(?:your\s+)?(?:bank|account|card|kyc|netbanking)\s*(?:account\s*)?"
+     r"(?:details|information|info|number)",
+     "Asks you to update bank or card details through a link. Banks and the tax department never ask for this by message."),
     ("task_job",
      r"part[- ]time job|work from home|earn (?:rs\.?|₹)\s?\d+\s+(?:for each|per)\s+(?:like|task|review)|like (?:youtube )?videos",
      "Offers easy money for simple online tasks. Real employers never charge you to start work."),
@@ -176,7 +183,9 @@ def headline(item_keys, flags):
     """Overall verdict for the whole forward, from one verdict per item plus the wording's warning signs."""
     keys = set(item_keys)
     doubtful = keys & {"NOT_FOUND", "NEEDS_CLARIFICATION"}
-    if keys & {"ON_WARNING_LIST", "INVALID"} or (flags and doubtful) or len(flags) >= 2:
+    by_rules = [f for f in flags if f.get("by") != "AI"]
+    # Warning signs the AI spotted can back up a rule-based finding, but never make a message high risk on their own.
+    if keys & {"ON_WARNING_LIST", "INVALID"} or (flags and doubtful) or (len(flags) >= 2 and by_rules):
         return "HIGH_RISK"
     if keys and keys == {"MATCHED"} and not flags:
         return "CONSISTENT"
@@ -203,4 +212,11 @@ if __name__ == "__main__":
     assert item_verdict(["CONFIRM_OFFICIALLY", "MATCHED"]) == "MATCHED"
     assert item_verdict(["MATCHED", "NOT_FOUND"]) == "NOT_FOUND"
     assert decide({**warn, "status": "not_found", "matches": []})[0] == "NOT_LISTED"
+    twins = {**reg, "matches": [{"name": "Sunil A Kamdar", "id": "ARN-108", "score": 100},
+                                {"name": "Sunil Kamdar", "id": "ARN-999", "score": 98}]}
+    assert decide(twins)[0] == "NEEDS_CLARIFICATION"
+    assert decide(twins, "ARN-108")[0] == "MATCHED"  # the message's own number settles it
+    ai = [{"code": "urgency", "by": "AI"}, {"code": "other", "by": "AI"}]
+    assert headline([], ai) == "CAUTION"  # AI alone can't make it high risk
+    assert headline([], ai[:1] + [{"code": "threat", "by": "rules"}]) == "HIGH_RISK"
     print("verdict.py checks passed")
