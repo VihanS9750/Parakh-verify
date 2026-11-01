@@ -6,7 +6,8 @@ Owner: Vihan. One check = four steps:
      plain rules here find the items and pick the checks instead.
   3. verdict.py decides every verdict with fixed rules. The AI never decides a verdict.
   4. The AI explains the result in English or Hindi (a template does it when AI is off).
-Aadhaar and PAN numbers are masked before any text is sent to the AI, and never looked up.
+Aadhaar, PAN and mobile numbers are masked before any text is sent to the AI, and never looked up.
+Screenshots are read here (OCR) and never sent to the AI: an image can't be masked.
 """
 import io
 import os
@@ -148,19 +149,22 @@ def _facts(report):
 def run_check(text, files=(), language="en", on_step=print):
     """The whole pipeline. files = [(filename, bytes, mime type)]: PDFs and screenshots."""
     start = time.time()
-    images = []
     for name, data, mime in files:
         if mime == "application/pdf":
             with pdfplumber.open(io.BytesIO(data)) as pdf:
                 text += "\n" + "\n".join(p.extract_text() or "" for p in pdf.pages)
         elif mime.startswith("image/"):
-            images.append((data, mime))
             on_step(f"Reading the text in {name}")
-            text += "\n" + read_image(data)
+            image_text = read_image(data)
+            if not image_text.strip():
+                on_step(f"Couldn't read any text in {name} (is Tesseract installed? see README). "
+                        "Screenshots are never sent to the AI, so paste the text instead.")
+            text += "\n" + image_text
 
     ai = None
     if brain.available():
-        found = brain.investigate(ids.mask(text), images, list(TOOLS), _run, on_step)
+        # Only masked text leaves this computer: no images, no Aadhaar/PAN/mobile numbers.
+        found = brain.investigate(ids.mask(text), [], list(TOOLS), _run, on_step)
         if found:
             checks, extra, ai = found
         else:

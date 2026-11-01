@@ -20,7 +20,8 @@ with st.sidebar:
     st.caption(("AI investigator: " + " → ".join(ai) + " → rules if both fail") if ai
                else "AI off (no key in .env): plain rules pick the checks.")
     st.caption("Verdicts always come from fixed rules, never from the AI. Connected checks: " + ", ".join(agent.TOOLS))
-    st.caption("Aadhaar and PAN numbers are masked before any text goes to the AI, and never looked up. "
+    st.caption("Aadhaar, PAN and mobile numbers are masked before any text goes to the AI, and never looked up. "
+               "Screenshots are read on this computer and never sent to the AI. "
                "We store a fingerprint of each forward, never the forward itself.")
 
 st.title("Parakh")
