@@ -9,7 +9,7 @@ How Parakh was built during the Forge buildathon (31 Oct to 1 Nov 2026), from th
 | 31 Oct | Scored the listed problem statements against the rubric and chose **T1.4: fact-verification** (live official data exists, any judge can try it, the problem is large). Market and competitor research, project brief. Rahul built the SEBI adviser search in a separate repo. |
 | 1 Nov, morning | Pipeline, verdict rules, SQLite store, live UGC / IRDAI / AMFI connectors, ID and link checks, Streamlit app, first evaluation. |
 | 1 Nov, midday | Merged Rahul's SEBI and RBI connectors, keeping both histories. The first design used an AI model; we removed it after being told pretrained models were not allowed. |
-| 1 Nov, afternoon | The organisers' answer was corrected: pretrained models **are** allowed. We added the AI investigator back on Gemini's free tier only (no paid API, and a second provider we first tried was dropped later for that reason), with the rules as the fallback and the safety net. Screenshot reading with offline OCR. |
+| 1 Nov, afternoon | The organisers' answer was corrected: pretrained models **are** allowed. We added the AI investigator back on Gemini's free tier only (no paid API: a second AI provider was tried and later dropped to stay on free tiers only), with the rules as the fallback and the safety net. Screenshot reading with offline OCR. |
 | 1 Nov, evening | SEBI registers (advisers, analysts, brokers) and enforcement orders, RBI Alert List for links, link evidence (short-link destination, website age), audit fixes, 25-bank impersonation check, UPI QR check, wider masking of personal data, honest wording and evidence labels, a prompt-injection test, Rahul's frontend, and 8 fresh forwards from family WhatsApp groups. |
 
 ## Decisions and why
