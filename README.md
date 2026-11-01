@@ -64,7 +64,7 @@ winget install UB-Mannheim.TesseractOCR
 .venv\Scripts\streamlit run app.py
 ```
 
-Screenshots are read offline by Tesseract. For Hindi, put `eng.traineddata` and `hin.traineddata` from github.com/tesseract-ocr/tessdata_fast in a `tessdata\` folder here (not committed). Without a key the app runs in rules-only mode; without Tesseract, Gemini still reads screenshots.
+Screenshots are read offline by Tesseract. For Hindi, put `eng.traineddata` and `hin.traineddata` from github.com/tesseract-ocr/tessdata_fast in a `tessdata\` folder here (not committed). Without a key the app runs in rules-only mode. Without Tesseract, screenshots can't be read: images are never sent to the AI, because an image can't be masked. Before any text goes to the AI, Aadhaar, PAN and phone numbers are masked to their last 4 characters.
 
 Self-checks, which run live lookups:
 

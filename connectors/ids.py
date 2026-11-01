@@ -56,7 +56,7 @@ PATTERNS = {
                  "https://www.sebi.gov.in/sebiweb/other/OtherAction.do?doRecognisedFpi=yes&intmId=13"),
     "arn": (r"\bARN[-\s]?\d{1,7}\b", "AMFI distributor code (ARN)", "https://www.amfiindia.com/locate-distributor"),
     "upi": (r"\b[\w.-]{2,64}@[A-Za-z]{2,64}\b(?!\.\w)", "UPI ID", "https://siportal.sebi.gov.in/intermediary/sebi-check"),
-    "phone": (r"(?:\+91[\s-]?)?\b[6-9]\d{9}\b", "Mobile number", "https://sancharsaathi.gov.in/sfc/"),
+    "phone": (r"(?:\+91[\s-]?)?\b[6-9]\d{4}[\s-]?\d{5}\b", "Mobile number", "https://sancharsaathi.gov.in/sfc/"),
     "url": (r"\b(?:https?://|www\.)[^\s<>\"']+|(?<![@\w.-])[a-z0-9-]+(?:\.[a-z0-9-]+)*"
             r"\.(?:apk|in|com|net|org|xyz|top|online|site|info|ly|gd|at|cc|io|app|link)(?:/[^\s<>\"']*)?",
             "Link", ""),
@@ -96,9 +96,10 @@ def find_ids(text):
 
 
 def mask(text):
-    """Hide Aadhaar and PAN numbers before text leaves this computer. Keeps the last 4 characters."""
+    """Hide Aadhaar, PAN and phone numbers before text leaves this computer. Keeps the last 4 characters,
+    so the AI still knows a number was there."""
     for kind, value in find_ids(text):
-        if kind in ("aadhaar", "pan"):
+        if kind in ("aadhaar", "pan", "phone"):
             text = text.replace(value, "X" * (len(value) - 4) + value[-4:])
     return text
 
@@ -205,4 +206,8 @@ if __name__ == "__main__":
     kinds = [k for k, _ in find_ids("Pay to 9876543210 or ravi@ybl, SEBI reg INA000017523, see bit.ly/x1")]
     assert kinds == ["sebi_reg", "upi", "phone", "url"], kinds
     assert "ABCPE1234F" not in mask("PAN ABCPE1234F")
+    assert mask("Call 9876543210 or +91 98765 43210 now") == "Call XXXXXX3210 or XXXXXXXXXXX3210 now"
+    assert mask("Call +91 9876543210") == "Call XXXXXXXXXX3210"
+    aadhaar = "2345 6789 012" + next(str(c) for c in range(10) if verhoeff_ok("23456789012" + str(c)))
+    assert [k for k, _ in find_ids(aadhaar)] == ["aadhaar"]  # a spaced Aadhaar must not also look like a phone
     print("ids.py checks passed")

@@ -27,7 +27,7 @@ We are not first. SEBI's "Spot a Scam" and SEBI Check, RBI Sachet and Truecaller
 5. **Never call a named firm or person a "fraud".** Say "not found in the SEBI investment adviser register as of 14:32 IST".
 6. **Never get around a block.** No captcha solving, no login/OTP automation, no browser-like headers to dodge a bot filter (RBI returns HTTP 418 to scripts: download its lists by hand). Our user agent says who we are (`connectors/net.py`), 1 request/second per site.
 7. **Narrow purpose.** Parakh is a verification service, not a general chatbot (WhatsApp has banned general-purpose AI bots since Jan 2026).
-8. **Protect personal data.** Aadhaar and PAN numbers are never looked up. They are masked in text (`ids.mask`) and blacked out in screenshots (`agent.mask_image`) before anything goes to the AI. The check log stores a hash of the forward, never the forward.
+8. **Protect personal data.** The AI only ever gets masked text: `brain.py` runs `ids.mask` on everything it sends, so Aadhaar, PAN and phone numbers keep only their last 4 characters. Images are never sent to the AI (an image can't be masked); Tesseract reads screenshots on the laptop and that text is masked like typed text. Aadhaar and PAN are never looked up. The check log stores a hash of the forward, never the forward.
 9. **Free AI only, and the AI never decides a verdict.** Pretrained models are allowed (organisers, checked again 1 Nov afternoon); we use free tiers only (no paid API). Keys live in `.env`, never committed.
 
 ## How it works
@@ -36,8 +36,8 @@ We are not first. SEBI's "Spot a Scam" and SEBI Check, RBI Sachet and Truecaller
 forward (text / screenshot / PDF / voice note)
   -> app.py         Streamlit page: check, check log, sources            (Vihan, Atharva)
   -> agent.py       1. get the text: pdfplumber, Tesseract OCR (eng+hin, offline), Whisper for audio
-                       mask Aadhaar/PAN in text and screenshots
-                    2. brain.py: the AI reads the forward (and screenshot) and calls our checks as tools
+                    2. brain.py: masks Aadhaar/PAN/phone numbers, then the AI reads the text and calls our checks as tools
+                       (no images are ever sent to the AI)
                        Gemini 3.5 Flash-Lite (free) -> Groq Qwen 3.8 27B (free) -> plain rules
                        the rules' checks ALWAYS run too (safety net); duplicates are dropped
                        follow-up: every SEBI register check is followed by a SEBI enforcement-order search

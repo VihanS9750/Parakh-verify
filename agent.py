@@ -6,7 +6,8 @@ Owner: Vihan. One check = four steps:
      plain rules here find the items and pick the checks instead.
   3. verdict.py decides every verdict with fixed rules. The AI never decides a verdict.
   4. The AI explains the result in English or Hindi (a template does it when AI is off).
-Aadhaar and PAN numbers are masked before any text is sent to the AI, and never looked up.
+The AI only ever gets masked text: Aadhaar, PAN and phone numbers keep just their last 4 characters
+(ids.mask), and images are never sent, only the text Tesseract read from them. Aadhaar/PAN are never looked up.
 """
 import io
 import os
@@ -17,7 +18,7 @@ from pathlib import Path
 
 import pdfplumber
 import pytesseract
-from PIL import Image, ImageDraw
+from PIL import Image
 
 import brain
 import store
@@ -183,36 +184,6 @@ def read_image(data):
     return pytesseract.image_to_string(Image.open(io.BytesIO(data)), lang=langs)
 
 
-def mask_image(data):
-    """Black out Aadhaar and PAN numbers in a screenshot before it is sent to the AI.
-    Tesseract finds each word's position; a line containing an Aadhaar or PAN number gets those words covered.
-    Returns PNG bytes, or the original bytes if nothing needed hiding (or Tesseract isn't installed)."""
-    if not Path(TESSERACT).exists():
-        return data
-    pytesseract.pytesseract.tesseract_cmd = TESSERACT
-    img = Image.open(io.BytesIO(data)).convert("RGB")
-    d = pytesseract.image_to_data(img, lang="eng", output_type=pytesseract.Output.DICT)
-    lines = {}
-    for i, word in enumerate(d["text"]):
-        if word.strip():
-            lines.setdefault((d["block_num"][i], d["par_num"][i], d["line_num"][i]), []).append(i)
-    draw, hidden = ImageDraw.Draw(img), 0
-    for words in lines.values():
-        line = " ".join(d["text"][i] for i in words)
-        secret = "".join(v for k, v in ids.find_ids(line) if k in ("aadhaar", "pan")).replace(" ", "")
-        for i in words:
-            w = d["text"][i].strip(".,:;")
-            if secret and len(w) >= 4 and w in secret:
-                x, y, wd, ht = d["left"][i], d["top"][i], d["width"][i], d["height"][i]
-                draw.rectangle([x - 2, y - 2, x + wd + 2, y + ht + 2], fill="black")
-                hidden += 1
-    if not hidden:
-        return data
-    out = io.BytesIO()
-    img.save(out, "PNG")
-    return out.getvalue()
-
-
 def _facts(report):
     """What the AI may use to explain the result: verdicts and reasons, nothing else."""
     return {"overall": verdict.HEADLINES[report["headline"]][0],
@@ -223,18 +194,19 @@ def _facts(report):
 
 
 def run_check(text, files=(), language="en", on_step=print):
-    """The whole pipeline. files = [(filename, bytes, mime type)]: PDFs and screenshots."""
+    """The whole pipeline. files = [(filename, bytes, mime type)]: PDFs, screenshots and voice notes."""
     start = time.time()
-    images = []
     for name, data, mime in files:
         if mime == "application/pdf":
             with pdfplumber.open(io.BytesIO(data)) as pdf:
                 text += "\n" + "\n".join(p.extract_text() or "" for p in pdf.pages)
-        elif mime.startswith("image/"):
+        elif mime.startswith("image/"):  # read here, never sent anywhere: an image can't be masked
             on_step(f"Reading the text in {name}")
-            text += "\n" + read_image(data)
-            masked = mask_image(data)  # only the masked copy can leave this computer
-            images.append((masked, mime if masked is data else "image/png"))
+            seen_text = read_image(data)
+            text += "\n" + seen_text
+            if not seen_text.strip():
+                on_step(f"Couldn't read any text in {name}" +
+                        ("" if Path(TESSERACT).exists() else " (Tesseract isn't installed)") + ". Paste the text instead.")
         elif mime.startswith("audio/"):
             on_step(f"Listening to {name}")
             try:
@@ -246,8 +218,8 @@ def run_check(text, files=(), language="en", on_step=print):
             on_step(f"Heard: “{heard[:160]}”" if heard else "No speech-to-text available (needs GROQ_API_KEY).")
 
     ai = None
-    if brain.available():
-        found = brain.investigate(ids.mask(text), images, list(TOOLS), _run, on_step)
+    if brain.available() and text.strip():
+        found = brain.investigate(text, list(TOOLS), _run, on_step)  # brain.py masks everything it sends
         if found:
             checks, extra, ai = found
         else:
@@ -272,7 +244,7 @@ def run_check(text, files=(), language="en", on_step=print):
             checks.append({"item": c["item"], "tool": "SEBI enforcement orders",
                            "result": _run("SEBI enforcement orders", c["item"])})
 
-    flags = verdict.warning_signs(text + "\n" + extra.get("text_in_images", ""))
+    flags = verdict.warning_signs(text)
     seen = {f["code"] for f in flags}
     for c in checks:  # warning signs found by a check, e.g. a website registered last week
         flag = c["result"].get("flag")
