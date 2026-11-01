@@ -22,7 +22,6 @@ import pytesseract
 from PIL import Image
 
 import brain
-import store
 import verdict
 from connectors import banks, ids, links, lists, net, sebi_orders, upi_qr, urlhaus
 
@@ -318,7 +317,6 @@ def run_check(text, files=(), language="en", on_step=print):
         except brain.openai.OpenAIError:
             pass  # keep the template explanation
     report["duration_ms"] = int((time.time() - start) * 1000)
-    store.log_check(text, headline, [c["verdict"] for c in checks], report["duration_ms"], report["mode"])
     return report
 
 
