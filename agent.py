@@ -271,10 +271,15 @@ def run_check(text, files=(), language="en", on_step=print):
         if flag and flag["code"] not in seen:
             seen.add(flag["code"])
             flags.append(flag)
-    for c in extra.get("claims", []):  # warning signs the AI spotted that our patterns missed
-        if c.get("type") not in seen:
-            seen.add(c.get("type"))
-            flags.append({"code": c.get("type", "other"), "reason": c.get("text", ""), "by": "AI"})
+    for c in extra.get("claims", []) if isinstance(extra.get("claims"), list) else []:
+        # A warning sign the AI spotted is kept only if its type is one we know and the words it quotes are
+        # really in the message (a claim with no support in the forward is dropped, never shown).
+        kind, quote = (c.get("type"), c.get("text")) if isinstance(c, dict) else (None, None)
+        grounded = isinstance(quote, str) and len(quote) >= 4 and " ".join(quote.lower().split()) in " ".join(text.lower().split())
+        if kind in brain.CLAIM_TYPES and grounded and kind not in seen:
+            seen.add(kind)
+            flags.append({"code": kind, "reason": f"“{quote}”: wording that looks like a warning sign ({kind.replace('_', ' ')}).",
+                          "by": "AI"})
     for c in checks:
         c["verdict"], c["reason"] = verdict.decide(c["result"], c.get("claimed_id", ""))
 
@@ -304,7 +309,7 @@ if __name__ == "__main__":
                     "to ravi.k@okaxis within 24 hours. Details: bit.ly/fastdegree", on_step=lambda s: None)
     verdicts = rep["items"]  # one verdict per item: the most telling of its checks
     assert verdicts.get("Commercial University Ltd") == "ON_WARNING_LIST", verdicts
-    assert verdicts.get("bit.ly/fastdegree") == "INVALID", verdicts
+    assert verdicts.get("bit.ly/fastdegree") == "HIDDEN_DESTINATION", verdicts
     assert rep["headline"] == "HIGH_RISK", rep["headline"]
     if sebi:
         r = _sebi("29K Investment Advisers")

@@ -187,10 +187,14 @@ def check_link(url, claimed_body=""):
                             "(.gov.in or .nic.in).")
         if any(w in host for w in GOV_WORDS):
             problems.append(f"{host} uses a government-sounding name but is not on .gov.in or .nic.in.")
-        if host in SHORTENERS:
-            problems.append(f"{host} is a link shortener that hides where the link really goes.")
         if path.endswith(".apk") or ".apk?" in path:
             problems.append("It downloads an Android app file (.apk) from outside the Play Store.")
+        hidden = host in SHORTENERS  # opaque, not malicious by itself: links.inspect reports where it leads
+        if hidden and not problems:
+            return result("Link check", "Parakh offline rules", url, "hidden", source_url="", list_type="format",
+                          detail=f"{host} is a link shortener that hides where the link really goes. "
+                                 "Check the destination before opening it.",
+                          limitations="Looks only at the address; it does not open the link.")
         detail = " ".join(problems) or f"{host} is not a government domain; that alone isn't proof of anything."
     return result("Link check", "Parakh offline rules", url, "invalid" if problems else "needs_user",
                   source_url="", list_type="format", detail=detail,
@@ -205,7 +209,8 @@ if __name__ == "__main__":
     assert check(bad)["status"] == "invalid"
     assert check("https://incometax-refund.in/claim")["status"] == "invalid"
     assert check("https://www.incometax.gov.in/iec/foportal/")["status"] == "needs_user"
-    assert check("bit.ly/abc123")["status"] == "invalid"
+    assert check("bit.ly/abc123")["status"] == "hidden"  # a shortener alone is opaque, not invalid
+    assert check_link("bit.ly/abc123", "Income Tax Department")["status"] == "invalid"  # but not when it poses as a government site
     assert find_ids("Click: https://wwtax.icu") == [("url", "https://wwtax.icu")]  # any https link, any ending
     assert check_link("https://wwtax.icu", "Income Tax Department")["status"] == "invalid"
     assert check_link("https://www.incometax.gov.in/iec/", "Income Tax Department")["status"] == "needs_user"

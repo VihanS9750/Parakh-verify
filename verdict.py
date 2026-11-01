@@ -17,6 +17,7 @@ VERDICTS = {
     "NOT_FOUND": ("Not found in the checked register", "जाँचे गए रजिस्टर में नहीं मिला", "orange"),
     "NEEDS_CLARIFICATION": ("Needs clarification", "स्पष्टता ज़रूरी है", "orange"),
     "IN_SEBI_ORDER": ("Named in a SEBI enforcement order", "SEBI के प्रवर्तन आदेश में नाम है", "orange"),
+    "HIDDEN_DESTINATION": ("Short link: check where it leads", "छोटा लिंक: देखें कि यह कहाँ ले जाता है", "orange"),
     "NOT_LISTED": ("Not on the official warning list", "आधिकारिक चेतावनी सूची में नहीं है", "blue"),
     "NO_SEBI_ORDER": ("No SEBI enforcement order found", "कोई SEBI प्रवर्तन आदेश नहीं मिला", "blue"),
     "CONFIRM_OFFICIALLY": ("Format OK: confirm on the official page", "फ़ॉर्मेट सही है: आधिकारिक पेज पर पुष्टि करें", "blue"),
@@ -25,7 +26,14 @@ VERDICTS = {
 
 
 def _same_id(a, b):
-    return re.sub(r"[^A-Z0-9]", "", (a or "").upper()).lstrip("0") in re.sub(r"[^A-Z0-9]", "", (b or "").upper())
+    """Exact match after dropping spaces, dashes and case: INA000017523 never matches INA0000175230."""
+    norm = lambda s: re.sub(r"[^A-Z0-9]", "", (s or "").upper())
+    return bool(norm(a)) and norm(a) == norm(b)
+
+
+def _dated(r):
+    """For a hand-downloaded list, say how old the official data is, not just when we searched it."""
+    return f" {r['detail']}" if r.get("data_as_of") and r.get("detail") else ""
 
 
 def decide(r, claimed_id=""):
@@ -37,6 +45,8 @@ def decide(r, claimed_id=""):
         return "INVALID", r["detail"]
     if status == "needs_user":
         return "CONFIRM_OFFICIALLY", r["detail"]
+    if status == "hidden":  # a short link: suspicious only if where it leads is (connectors/links.py checks that)
+        return "HIDDEN_DESTINATION", r["detail"]
 
     top = r["matches"][0] if r["matches"] else None
     if kind == "orders":  # SEBI enforcement orders: shown as evidence to read, never proof on its own
@@ -56,7 +66,7 @@ def decide(r, claimed_id=""):
     # A register: being found is good, but only if the match is clear.
     if status == "not_found":
         hint = f" Closest name: '{top['name']}' ({top['score']}% match)." if top else ""
-        return "NOT_FOUND", f"No record matching '{r['query']}' in the {r['source']}.{hint}"
+        return "NOT_FOUND", f"No record matching '{r['query']}' in the {r['source']}.{hint}{_dated(r)}"
     rivals = [m for m in r["matches"][1:] if m["score"] >= top["score"] - RIVAL_GAP]
     same = [m for m in r["matches"] if claimed_id and m["score"] >= STRONG and m.get("id") and _same_id(claimed_id, m["id"])]
     if same:  # several similar names, but the message's own number picks one of them
@@ -70,7 +80,7 @@ def decide(r, claimed_id=""):
                                        f"{top['id']}, not {claimed_id} as the message says.")
     if top.get("valid_till") and top["valid_till"] < date.today().isoformat():
         return "NEEDS_CLARIFICATION", f"'{top['name']}' is registered, but the registration expired on {top['valid_till']}."
-    return "MATCHED", f"Found '{top['name']}' {top.get('id', '')} in the {r['source']}."
+    return "MATCHED", f"Found '{top['name']}' {top.get('id', '')} in the {r['source']}.{_dated(r)}"
 
 
 # Warning signs in the wording of the message itself. (code, pattern, plain-English reason)
@@ -179,11 +189,14 @@ NEXT_STEPS = {
 
 # When one item has several checks, the most telling verdict wins: any red or doubtful finding first,
 # then a register match (which beats a mere "format OK"), then the neutral ones.
-RANK = ["ON_WARNING_LIST", "INVALID", "NOT_FOUND", "NEEDS_CLARIFICATION", "IN_SEBI_ORDER", "MATCHED",
-        "COULDNT_VERIFY", "NOT_LISTED", "NO_SEBI_ORDER", "CONFIRM_OFFICIALLY"]
+RANK = ["ON_WARNING_LIST", "INVALID", "NOT_FOUND", "NEEDS_CLARIFICATION", "IN_SEBI_ORDER", "HIDDEN_DESTINATION",
+        "MATCHED", "COULDNT_VERIFY", "NOT_LISTED", "NO_SEBI_ORDER", "CONFIRM_OFFICIALLY"]
 
 
 def item_verdict(keys):
+    keys = set(keys)
+    if "MATCHED" in keys:  # found in the register that fits; absent from an unrelated register proves nothing
+        keys.discard("NOT_FOUND")
     return min(keys, key=RANK.index)
 
 
@@ -218,7 +231,18 @@ if __name__ == "__main__":
     assert headline(["MATCHED"], flags) == "HIGH_RISK"
     assert headline(["COULDNT_VERIFY"], []) == "CAUTION"
     assert item_verdict(["CONFIRM_OFFICIALLY", "MATCHED"]) == "MATCHED"
-    assert item_verdict(["MATCHED", "NOT_FOUND"]) == "NOT_FOUND"
+    assert item_verdict(["MATCHED", "NOT_FOUND"]) == "MATCHED"  # e.g. in AMFI's register, not in SEBI's
+    assert item_verdict(["MATCHED", "ON_WARNING_LIST"]) == "ON_WARNING_LIST"  # a warning still wins
+    assert _same_id("ARN-108", "arn 108") and _same_id("INA000017523", "INA000017523")
+    assert not _same_id("INA000017523", "INA0000175230") and not _same_id("17523", "INA000017523")
+    assert not _same_id("", "INA000017523") and not _same_id("ARN-10", "ARN-108")
+    assert decide({**reg, "matches": [{"name": "A", "id": "INA000017523", "score": 100}]}, "INA00001752")[0] \
+        == "NEEDS_CLARIFICATION"  # a number that is only part of the real one is a mismatch
+    assert decide({**reg, "status": "hidden", "list_type": "format", "matches": [], "detail": "x"})[0] == "HIDDEN_DESTINATION"
+    assert headline(["HIDDEN_DESTINATION"], []) == "CAUTION"  # a short link alone is not high risk
+    rbi = {**reg, "matches": [{"name": "Bajaj Finance Limited", "id": "", "score": 100}], "data_as_of": "2026-11-01",
+           "detail": "From RBI's list as on 2026-09-30, downloaded 2026-11-01."}
+    assert "as on 2026-09-30" in decide(rbi)[1]  # the official data's own date is shown
     assert decide({**warn, "status": "not_found", "matches": []})[0] == "NOT_LISTED"
     twins = {**reg, "matches": [{"name": "Sunil A Kamdar", "id": "ARN-108", "score": 100},
                                 {"name": "Sunil Kamdar", "id": "ARN-999", "score": 98}]}

@@ -23,6 +23,8 @@ PROVIDERS = [
     ("Groq", "GROQ_API_KEY", GROQ_URL, "qwen/qwen3.8-27b"),
 ]
 MAX_ROUNDS = 6  # tool-calling rounds before we stop the investigation
+CLAIM_TYPES = {"guaranteed_returns", "urgency", "threat", "pay_to_resolve", "kyc_block", "secrecy",
+               "otp_or_remote", "app_outside_store", "impersonation", "other"}
 
 
 def _load_env():
@@ -98,7 +100,7 @@ How to work:
 
 When finished, stop calling tools and write your final answer as plain text (not a tool call): only a JSON object,
 {"summary": "one sentence on what the message asks the reader to do",
- "claims": [{"text": "a warning sign in the message, in its own words", "type": one of "guaranteed_returns", "urgency", "threat", "pay_to_resolve", "kyc_block", "secrecy", "otp_or_remote", "app_outside_store", "impersonation", "other"}]}"""
+ "claims": [{"text": "the EXACT words copied from the message that show the warning sign (at least 4 characters)", "type": one of "guaranteed_returns", "urgency", "threat", "pay_to_resolve", "kyc_block", "secrecy", "otp_or_remote", "app_outside_store", "impersonation", "other"}]}"""
 
 
 def _json(reply):
