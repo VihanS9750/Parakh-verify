@@ -25,25 +25,23 @@ We are not first. SEBI's "Spot a Scam" and SEBI Check, RBI Sachet and Truecaller
 5. **Never call a named firm or person a "fraud".** Say "not found in the SEBI investment adviser register as of 14:32 IST".
 6. **Never get around a block.** No captcha solving, no login/OTP automation, no browser-like headers to dodge a bot filter (RBI returns HTTP 418 to scripts: download its lists by hand). Our user agent says who we are (`connectors/net.py`), 1 request/second per site.
 7. **Narrow purpose.** Parakh is a verification service, not a general chatbot (WhatsApp has banned general-purpose AI bots since Jan 2026).
-8. **Protect personal data.** `ids.mask()` hides Aadhaar and PAN before anything is sent to Claude. The check log stores a hash of the forward, never the forward.
-9. **Secrets live in `.env`** (never committed). See `.env.example`.
+8. **Protect personal data.** Aadhaar and PAN numbers are never looked up or sent anywhere (`agent.investigate` skips them). The check log stores a hash of the forward, never the forward.
+9. **No external AI service and no pretrained model** (organisers, 1 Nov). Everything runs on the laptop. A model we train ourselves from public data is allowed in principle; see [docs/research/own-model-plan.md](docs/research/own-model-plan.md).
 
 ## How it works
 
 ```
-forward (text / screenshot / PDF)
+forward (pasted text / PDF)
   -> app.py         Streamlit page: check, check log, sources            (Vihan, Atharva)
-  -> agent.py       1. mask Aadhaar/PAN                                   (Vihan)
-                    2. Claude reads the forward and calls connectors as tools
-                       (parallel calls, retries a cleaned name once);
-                       no API key or Claude fails -> plain rules pick the checks
-                    4. Claude explains the result in the chosen language
+  -> agent.py       1. regexes find IDs, UPI IDs, links, organisation names   (Vihan)
+                    2. keywords in the message pick the register for each item
+                    4. a template explains the result (English or Hindi)
   -> verdict.py     3. plain rules decide every verdict + warning signs   (Vihan)
   -> connectors/    one function per official source                     (Rahul: SEBI/RBI, Atharva: rest)
   -> store.py       SQLite: dated copies of lists + check log              (Atharva)
 ```
 
-Model: `claude-opus-5-5` (one constant in `agent.py`), effort `low` for speed, `fallbacks="default"` so a declined request retries on Anthropic's recommended model. Claude reads screenshots and PDFs directly; no OCR step.
+Screenshots are not read yet: OCR (Tesseract) waits on the organisers' answer about pretrained models.
 
 ## The connector contract
 
@@ -70,7 +68,7 @@ Every connector returns this dict (build it with `net.result(...)`):
 - `invalid`: fails a format/check-digit test, or a link pretends to be a government site.
 - Each connector file ends with an `if __name__ == "__main__":` block that runs **live** lookups. Run as `python -m connectors.lists`.
 
-**Rahul's connectors plug in automatically**: `agent.py` imports `connectors.sebi` and `connectors.rbi` if they exist. Expected functions: `sebi.search_sebi(name_or_regno)` and `rbi.search_rbi(name)`, each returning the dict above (`list_type="warning_list"` for the RBI Alert List).
+**Rahul's connectors** use their own shape (`connectors/base.py`: `note`, `data_as_of`, found at 70+). `agent._sebi` wraps `sebi.search()` into the dict above and re-applies our found-at-90 bar. Only the investment adviser register is live (`sebi.INTM_IDS`); research analysts and brokers need their `intmId` captured. An RBI connector should provide `rbi.search_rbi(name)` returning the dict above (`list_type="warning_list"` for the Alert List); `agent.py` picks it up automatically.
 
 ## Verdicts (verdict.py, plain rules)
 
@@ -85,7 +83,7 @@ Every connector returns this dict (build it with `net.result(...)`):
 | Format OK: confirm on the official page | valid format, gated source (eCourts, income tax, CBIC, GST) |
 | Couldn't verify right now | source down |
 
-Each item takes its most telling verdict (`verdict.RANK`). Overall: **High risk** if any red verdict, or a doubtful item plus a warning sign, or 2+ warning signs; **Consistent** only if every item matched and there are no warning signs; otherwise **Be careful**. Warning signs come from fixed patterns based on SEBI/RBI/I4C/PIB advisories (`verdict.RED_FLAGS`), plus claims Claude spots (labelled "spotted by AI").
+Each item takes its most telling verdict (`verdict.RANK`). Overall: **High risk** if any red verdict, or a doubtful item plus a warning sign, or 2+ warning signs; **Consistent** only if every item matched and there are no warning signs; otherwise **Be careful**. Warning signs come from fixed patterns based on SEBI/RBI/I4C/PIB advisories (`verdict.RED_FLAGS`).
 
 Careful with what a match means: a registered NBFC doesn't make an app claiming to work with it legitimate (check RBI's lending-app list); a court case doesn't mean fraud; a valid ID format doesn't prove the ID was issued.
 
@@ -93,7 +91,7 @@ Careful with what a match means: a registered NBFC doesn't make an app claiming 
 
 ```
 app.py              Streamlit page                         Vihan / Atharva
-agent.py            pipeline, Claude tool loop, rules fallback   Vihan
+agent.py            pipeline: find items, pick checks, report      Vihan
 verdict.py          verdict rules, warning signs, next steps     Vihan
 store.py            SQLite: list snapshots + check log           Atharva
 eval.py             runs test_forwards/forwards.json             Rahul (scaffolded)
@@ -101,25 +99,26 @@ connectors/
   net.py            polite GET + result() shape                  Atharva
   lists.py          UGC fake list, IRDAI, AMFI (live)            Atharva
   ids.py            GSTIN/PAN/CIN/CNR/DIN/SEBI/ARN/UPI/link checks Atharva
-  sebi.py, rbi.py   Rahul's (to merge)
+  sebi.py           SEBI adviser search (live) + saved-page backup Rahul
+  base.py, matching.py, local_list.py   Rahul's helpers; local_list = hand-downloaded lists (RBI)
 test_forwards/      23 forwards from official advisories/news, with sources
-docs/               market analysis, eval results
+docs/               build log, market analysis, eval results, research/
 ```
 
 ## Run and test
 
 ```
 python -m venv .venv && .venv\Scripts\pip install -r requirements.txt
-copy .env.example .env        (add ANTHROPIC_API_KEY)
 .venv\Scripts\streamlit run app.py
-.venv\Scripts\python verdict.py ; .venv\Scripts\python -m connectors.ids ; .venv\Scripts\python -m connectors.lists ; .venv\Scripts\python agent.py ; .venv\Scripts\python eval.py
+.venv\Scripts\python verdict.py ; .venv\Scripts\python -m connectors.ids ; .venv\Scripts\python -m connectors.lists ; .venv\Scripts\python -m connectors.sebi "29K Investment Advisers" ; .venv\Scripts\python agent.py ; .venv\Scripts\python eval.py
 ```
 
 ## Sources (tested from an Indian connection, 1 Nov 2026)
 
 | Source | How we use it | Status |
 |---|---|---|
-| SEBI intermediaries (IA, RA pages) | Rahul's connector | Loads with our honest user agent |
+| SEBI investment advisers | Live search (Rahul's `sebi.py`) | Working |
+| SEBI research analysts, brokers | Format check + link (SEBI Check) | `intmId` not captured yet |
 | UGC fake universities (32, Feb 2026) | Live HTML table, cached 24 h | Working |
 | IRDAI life/general/health insurers, brokers | Live HTML tables, cached 24 h | Working |
 | AMFI distributors | Live JSON search behind the public page | Working |
