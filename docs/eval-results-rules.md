@@ -22,7 +22,7 @@ so expect lower numbers on messages the team has never seen. Add fresh forwards 
 | INV-4 | yes | HIGH_RISK | - | sebi_claim_no_number, admits_unregistered, tip_group |
 | INV-5 | yes | HIGH_RISK | - | sebi_claim_no_number, tip_group, pay_to_resolve |
 | TAX-1 | yes | CAUTION | - | official_via_link |
-| TAX-2 | yes | CAUTION | api.teledema.scoding.com/storage/foi/index.html: CONFIRM_OFFICIALLY | - |
+| TAX-2 | yes | CAUTION | ITBA/AST/F/17/2025-26/1035917840: CONFIRM_OFFICIALLY; api.teledema.scoding.com/storage/foi/index.html: CONFIRM_OFFICIALLY | - |
 | TAX-4 | yes | CAUTION | - | unexpected_money |
 | TAX-5 | yes | CAUTION | - | unexpected_money |
 | KYC-1 | yes | HIGH_RISK | UPDATE.apk: INVALID | kyc_block, app_outside_store |

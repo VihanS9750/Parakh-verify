@@ -48,12 +48,14 @@ PATTERNS = {
     "cin": (r"\b[LU]\d{5}[A-Z]{2}\d{4}[A-Z]{3}\d{6}\b", "Company ID (CIN)",
             "https://www.mca.gov.in/content/mca/global/en/mca/master-data/MDS.html"),
     "cnr": (r"\b[A-Z]{4}\d{12}\b", "eCourts case number (CNR)", "https://services.ecourts.gov.in/ecourtindia_v6/"),
-    "itd_din": (r"\bITBA/[A-Z]{2,6}/[A-Z]/[\w().-]+/\d{4}-\d{2}/\d{10}\(\d\)", "Income Tax document ID (DIN)",
+    "itd_din": (r"\bITBA/[A-Z]{2,6}/[A-Z]/[\w().-]+/\d{4}-\d{2}/\d{10}(?:\(\d\))?", "Income Tax document ID (DIN)",
                 "https://www.incometax.gov.in/iec/foportal/"),
-    "sebi_reg": (r"\bIN[AHZPM]\d{9}\b", "SEBI registration number",
+    "cbic_din": (r"\bCBIC-\d{4}\s?\d{2}\s?[A-Z0-9]{3,5}\s?\d{6}\b", "CBIC document ID (DIN)",
+                 "https://esanchar.cbic.gov.in/DIN/DINSearch"),
+    "sebi_reg": (r"\bIN[AHZPMBFE]\d{9}\b", "SEBI registration number",
                  "https://www.sebi.gov.in/sebiweb/other/OtherAction.do?doRecognisedFpi=yes&intmId=13"),
     "arn": (r"\bARN[-\s]?\d{1,7}\b", "AMFI distributor code (ARN)", "https://www.amfiindia.com/locate-distributor"),
-    "upi": (r"\b[\w.-]{2,64}@[A-Za-z]{2,64}\b(?!\.\w)", "UPI ID", "https://www.sebi.gov.in/"),
+    "upi": (r"\b[\w.-]{2,64}@[A-Za-z]{2,64}\b(?!\.\w)", "UPI ID", "https://siportal.sebi.gov.in/intermediary/sebi-check"),
     "phone": (r"(?:\+91[\s-]?)?\b[6-9]\d{9}\b", "Mobile number", "https://sancharsaathi.gov.in/sfc/"),
     "url": (r"(?:https?://|www\.)[^\s<>\"']+|(?<![@\w.-])[a-z0-9-]+(?:\.[a-z0-9-]+)*"
             r"\.(?:apk|in|com|net|org|xyz|top|online|site|info|ly|gd|at|cc|io|app|link)(?:/[^\s<>\"']*)?",
@@ -61,7 +63,12 @@ PATTERNS = {
 }
 
 SEBI_PREFIX = {"INA": "investment adviser", "INH": "research analyst", "INZ": "stock broker",
-               "INP": "portfolio manager", "INM": "merchant banker"}
+               "INP": "portfolio manager", "INM": "merchant banker", "INB": "stock broker (exchange segment)",
+               "INF": "stock broker (exchange segment)", "INE": "stock broker (exchange segment)"}
+# SEBI circular of 11 Jun 2025, Annexure B: registered intermediaries collect through <name>.<category>@valid<bank>
+VALID_UPI_CATEGORY = {"brk": "stock broker", "bti": "banker to an issue", "dp": "depository participant",
+                      "ra": "research analyst", "ia": "investment adviser", "invit": "InvIT", "mf": "mutual fund",
+                      "pms": "portfolio manager", "sreit": "small and medium REIT", "reit": "REIT"}
 PAN_HOLDER = {"P": "individual", "C": "company", "H": "Hindu undivided family", "F": "firm",
               "A": "association of persons", "T": "trust", "B": "body of individuals", "L": "local authority",
               "J": "artificial juridical person", "G": "government"}
@@ -121,13 +128,22 @@ def check(value, kind=None):
         detail = f"{'Listed' if v[0] == 'L' else 'Unlisted'} company, state {v[6:8]}, registered {v[8:12]}."
     elif kind == "sebi_reg":
         detail = f"Format of a SEBI-registered {SEBI_PREFIX.get(v[:3], 'intermediary')}. Check it in the SEBI register."
+    elif kind == "itd_din":
+        detail = ("Looks like an Income Tax document ID. Every genuine notice since Oct 2019 carries one; confirm it with "
+                  "'Authenticate notice/order' on the e-filing portal (no login, OTP to your mobile).")
+    elif kind == "cbic_din":
+        detail = "Looks like a CBIC document ID. Confirm it on CBIC's DIN search page (it asks for a captcha)."
     elif kind == "arn":
         detail = "Format of an AMFI distributor code. Check it in AMFI's register."
     elif kind == "upi":
-        handle = value.split("@")[1].lower()
-        detail = ("Uses a SEBI-verified '@valid' handle." if handle.startswith("valid") else
-                  "Ordinary UPI handle. Since Oct 2025, SEBI-registered advisers and brokers collect money "
-                  "through handles ending '@valid<bank>'. If this person claims to be SEBI-registered, that's a red flag.")
+        name, handle = value.lower().split("@")
+        category = VALID_UPI_CATEGORY.get(name.rsplit(".", 1)[-1]) if "." in name else None
+        if handle.startswith("valid"):
+            detail = (f"Uses SEBI's '@valid' format{f' for a {category}' if category else ''}. "
+                      "Confirm the name behind it on SEBI Check.")
+        else:
+            detail = ("Ordinary UPI handle. Since Oct 2025, SEBI-registered advisers and brokers collect money "
+                      "through handles like name.ia@validhdfc. If this person claims to be SEBI-registered, that's a red flag.")
     elif kind == "url":
         return check_link(value)
     elif kind == "phone":
@@ -172,7 +188,9 @@ if __name__ == "__main__":
     assert check("https://www.incometax.gov.in/iec/foportal/")["status"] == "needs_user"
     assert check("bit.ly/abc123")["status"] == "invalid"
     assert check("ravi.sharma@ybl")["detail"].startswith("Ordinary UPI")
-    assert check("abc.brk@validhdfc")["detail"].startswith("Uses a SEBI")
+    assert "stock broker" in check("abc.brk@validhdfc")["detail"]
+    assert [k for k, _ in find_ids("Ref ITBA/AST/F/17/2025-26/1035917840 and CBIC-2024 11 DL00 123456")] == \
+        ["itd_din", "cbic_din"]
     assert check("INA000017523")["status"] == "needs_user"
     kinds = [k for k, _ in find_ids("Pay to 9876543210 or ravi@ybl, SEBI reg INA000017523, see bit.ly/x1")]
     assert kinds == ["sebi_reg", "upi", "phone", "url"], kinds
