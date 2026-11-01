@@ -234,6 +234,15 @@ def run_check(text, files=(), language="en", on_step=print):
             text += "\n" + read_image(data)
             masked = mask_image(data)  # only the masked copy can leave this computer
             images.append((masked, mime if masked is data else "image/png"))
+        elif mime.startswith("audio/"):
+            on_step(f"Listening to {name}")
+            try:
+                heard = brain.transcribe(data, name)
+            except brain.openai.OpenAIError as e:
+                heard = ""
+                on_step(f"Couldn't transcribe it ({type(e).__name__}).")
+            text += "\n" + heard
+            on_step(f"Heard: “{heard[:160]}”" if heard else "No speech-to-text available (needs GROQ_API_KEY).")
 
     ai = None
     if brain.available():

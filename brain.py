@@ -15,10 +15,11 @@ import openai
 
 from connectors import ids
 
+GROQ_URL = "https://api.groq.com/openai/v1"
 # (name, key in .env, address, model, reads images?). Change a model with GEMINI_MODEL / GROQ_MODEL in .env.
 PROVIDERS = [
     ("Gemini", "GEMINI_API_KEY", "https://generativelanguage.googleapis.com/v1beta/openai/", "gemini-3.5-flash-lite", True),
-    ("Groq", "GROQ_API_KEY", "https://api.groq.com/openai/v1", "qwen/qwen3.8-27b", False),
+    ("Groq", "GROQ_API_KEY", GROQ_URL, "qwen/qwen3.8-27b", False),
 ]
 MAX_ROUNDS = 6  # tool-calling rounds before we stop the investigation
 
@@ -151,6 +152,15 @@ def investigate(text, images, connected, run_tool, on_step):
         except (openai.OpenAIError, ValueError, KeyError) as e:  # ValueError covers bad JSON
             on_step(f"{name} unavailable ({type(e).__name__}); trying the next option.")
     return None
+
+
+def transcribe(data, filename):
+    """Speech to text for a voice note or call recording, in Hindi or English (Whisper on Groq's free tier).
+    Returns "" when there is no Groq key."""
+    if not os.environ.get("GROQ_API_KEY"):
+        return ""
+    client = openai.OpenAI(api_key=os.environ["GROQ_API_KEY"], base_url=GROQ_URL, timeout=60, max_retries=1)
+    return client.audio.transcriptions.create(model="whisper-large-v3-turbo", file=(filename, data)).text
 
 
 def explain(ai, facts, language):
